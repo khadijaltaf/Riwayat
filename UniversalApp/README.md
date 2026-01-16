@@ -1,50 +1,79 @@
-# Welcome to your Expo app 👋
+# Riwayat - Heritage on a Plate 🍛
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+**Riwayat** is a premium home-cooked food delivery application designed to connect authentic home chefs with food lovers. The app features a stunning, high-end "Red & White" aesthetic and provides a seamless experience for both partners and customers.
 
-## Get started
+## ✨ Features
 
-1. Install dependencies
+### 📱 Dashboard & Interface
+*   **Premium UI/UX:** A modern, clean design using a curated "Riwayat Red" (#600E10) and White palette.
+*   **Dynamic Dashboard:**
+    *   **Kitchen Status:** One-tap online/offline switch with gradient card styling.
+    *   **Quick Actions:** 2x3 Grid layout for fast access to key features (Menu, Orders, Earnings, etc.).
+    *   **Recent Updates:** Carousel view of the latest platform news.
 
-   ```bash
-   npm install
-   ```
+### 💬 Advanced Chat System
+*   **WhatsApp-Style Messaging:** Real-time feel with bubble UI.
+*   **Rich Media:**
+    *   📸 Image Sharing (Gallery/Camera).
+    *   🎙️ Voice Notes (Recording & Playback with waveforms).
+    *   📞 One-tap calling (In-app routing or System dialer).
+*   **Smart Interactions:** Quick reply chips and status indicators.
 
-2. Start the app
+### 📝 Partner Registration
+*   **6-Step Flow:** Comprehensive onboarding including Personal Info, Kitchen Setup, Menu Creation, and Pricing.
+*   **Validation:** Smart input masking for Phone numbers (`03XX-XXXXXXX`) and CNIC.
+*   **Bypass Mode:** Dev features to test flows without backend dependencies.
 
-   ```bash
-   npx expo start
-   ```
+## 🛠️ Tech Stack
+*   **Framework:** React Native (Expo SDK 52)
+*   **Routing:** Expo Router (File-based routing)
+*   **Styling:** StyleSheet & Custom Design System (Popping Fonts)
+*   **Icons:** Ionicons
+*   **Audio/Media:** `expo-av`, `expo-image-picker`
 
-In the output, you'll find options to open the app in a
+## 🚀 Getting Started
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+### Prerequisites
+*   Node.js & npm/yarn
+*   Expo Go app on your phone
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+### Installation
 
-## Get a fresh project
+1.  **Clone the repository**
+    ```bash
+    git clone https://github.com/yourusername/riwayat-app.git
+    cd riwayat-app
+    ```
 
-When you're ready, run:
+2.  **Install dependencies**
+    ```bash
+    npm install
+    ```
+
+3.  **Start the app**
+    ```bash
+    npx expo start --tunnel
+    ```
+
+## 🔑 Test Credentials (Mock Auth)
+
+Use these credentials to log in during development:
+
+| Role | Phone | PIN |
+|------|-------|-----|
+| **Test Chef** | `03001122334` | `1234` |
+| **Chef Ahmad** | `03330000000` | `1234` |
+
+## 📦 Building for Android
+
+To generate a release APK:
 
 ```bash
-npm run reset-project
+npx expo prebuild
+cd android
+./gradlew assembleRelease
 ```
+The APK will be located in `android/app/build/outputs/apk/release/app-release.apk`.
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+---
+*Built with ❤️ for Riwayat*
