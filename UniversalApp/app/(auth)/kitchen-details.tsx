@@ -1,21 +1,37 @@
 
 import React, { useState } from 'react';
-import { StyleSheet, View, TextInput, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import { StyleSheet, View, TextInput, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView, Alert, Keyboard } from 'react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
+import { supabase } from '@/lib/supabase';
 
 export default function KitchenDetailsScreen() {
     const [kitchenName, setKitchenName] = useState('');
     const [tagline, setTagline] = useState('');
+    const { phone } = useLocalSearchParams<{ phone: string }>();
     const [showTaglineInfo, setShowTaglineInfo] = useState(false);
     const router = useRouter();
 
-    const handleContinue = () => {
+    const handleContinue = async () => {
+        Keyboard.dismiss();
         if (!kitchenName) return Alert.alert('Error', 'Please enter your kitchen name');
 
+        // Save to Supabase
+        try {
+            const { error } = await supabase.from('onboarding_sessions').update({
+                kitchen_name: kitchenName,
+                kitchen_tagline: tagline,
+                updated_at: new Date()
+            }).eq('phone', phone);
+
+            if (error) console.warn('Supabase save error:', error);
+        } catch (e) {
+            console.error(e);
+        }
+
         // Navigate to Screen 11: Kitchen Location
-        router.push('/(auth)/location');
+        router.push({ pathname: '/(auth)/location', params: { phone } });
     };
 
     return (
@@ -24,7 +40,7 @@ export default function KitchenDetailsScreen() {
             style={styles.container}
         >
             <StatusBar style="dark" />
-            <ScrollView contentContainerStyle={styles.scrollContent}>
+            <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
                 {/* Header */}
                 <View style={styles.header}>
                     <Text style={styles.stepText}>4/6</Text>
@@ -224,7 +240,7 @@ const styles = StyleSheet.create({
     },
     backButton: {
         flex: 1,
-        paddingVertical: 18,
+        paddingVertical: 16,
         borderRadius: 30,
         borderWidth: 1,
         borderColor: '#E0E0E0',
@@ -237,8 +253,8 @@ const styles = StyleSheet.create({
         color: '#1A1A1A',
     },
     nextButton: {
-        flex: 1.5,
-        paddingVertical: 18,
+        flex: 1,
+        paddingVertical: 16,
         borderRadius: 30,
         backgroundColor: '#5C1414',
         alignItems: 'center',

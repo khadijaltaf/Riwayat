@@ -29,7 +29,7 @@ export default function KitchenDetailsScreen() {
             style={styles.container}
         >
             <StatusBar style="dark" />
-            <ScrollView contentContainerStyle={styles.scrollContent}>
+            <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
                 {/* Header */}
                 <View style={styles.header}>
                     <Pressable onPress={() => router.back()} style={styles.backButtonIcon}>

@@ -1,77 +1,157 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { StyleSheet, View, Text, FlatList, Pressable, TextInput, Image, KeyboardAvoidingView, Platform, Alert, Linking, ActionSheetIOS, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, FlatList, Pressable, TextInput, Image, KeyboardAvoidingView, Platform, Alert, Linking, ActionSheetIOS, ScrollView, Modal, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
 import { Audio } from 'expo-av';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { chatService, ChatMessage } from '@/lib/chat-service';
+import { storageService } from '@/services/storage-service';
+import { supabase } from '@/lib/supabase';
 
 // UI Theme Colors
 const THEME = {
-    primary: '#FF5722', // Orange for user bubbles
-    secondary: '#FFFFFF', // White for other bubbles
+    primary: '#600E10', // Dark Red for Riwayat
+    secondary: '#FFFFFF',
     bg: '#F4F7FC',
-    inputBg: '#E8F0FE', // Light blue input area
-    sendBtn: '#4CAF50', // Green send button
+    inputBg: '#E8F0FE',
+    sendBtn: '#4CAF50',
 };
 
 type Message = {
     id: string;
     text?: string;
     image?: string;
+    video?: string;
     audio?: string;
     sender: 'user' | 'other';
     time: string;
+    duration?: number; // Duration for audio
 };
 
 export default function ChatDetailScreen() {
-    const { id, name } = useLocalSearchParams();
+    const { id, name, userPhone } = useLocalSearchParams<{ id: string; name: string; userPhone: string }>();
     const router = useRouter();
-    const [messages, setMessages] = useState<Message[]>([
-        { id: '1', text: 'Hello! Welcome to Riwayat Support.\nHow can I help you today?', sender: 'other', time: '10:30 AM' },
-        { id: '2', text: 'Hi, I have a question about my recent payout.', sender: 'user', time: '10:31 AM' },
-        { id: '3', text: 'I’d be happy to help you with that!\nCould you please provide your payout transaction ID?', sender: 'other', time: '10:32 AM' },
-    ]);
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [inputText, setInputText] = useState('');
     const [recording, setRecording] = useState<Audio.Recording | undefined>(undefined);
     const [sound, setSound] = useState<Audio.Sound | undefined>(undefined);
+    const [isRecording, setIsRecording] = useState(false);
+    const [attachmentModalVisible, setAttachmentModalVisible] = useState(false);
+    const [loading, setLoading] = useState(true);
+
     const flatListRef = useRef<FlatList>(null);
+    const insets = useSafeAreaInsets();
 
     // Permissions
     const [audioPermission, requestAudioPermission] = Audio.usePermissions();
 
     useEffect(() => {
-        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-    }, [messages]);
+        if (id) {
+            loadMessages();
+            const channel = chatService.subscribeToMessages(id, (newMsg) => {
+                setMessages(prev => {
+                    const exists = prev.find(m => m.id === newMsg.id);
+                    if (exists) return prev;
+                    return [...prev, newMsg];
+                });
+                setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+            });
+            return () => {
+                supabase.removeChannel(channel);
+            };
+        }
+    }, [id]);
 
-    const handleSend = () => {
-        if (!inputText.trim()) return;
-        const newMsg: Message = {
-            id: Date.now().toString(),
-            text: inputText,
-            sender: 'user',
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        };
-        setMessages((prev) => [...prev, newMsg]);
-        setInputText('');
+    const loadMessages = async () => {
+        try {
+            const history = await chatService.getMessages(id!);
+            setMessages(history);
+            setLoading(false);
+            setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 100);
+        } catch (e) {
+            console.error('Error loading history:', e);
+            setLoading(false);
+        }
     };
 
-    const handleImagePick = async () => {
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true,
-            quality: 1,
-        });
+    const handleSend = async () => {
+        if (!inputText.trim()) return;
+        const text = inputText;
+        setInputText('');
+
+        try {
+            await chatService.sendMessage({
+                conversation_id: id!,
+                sender_phone: userPhone || 'Unknown',
+                content: text
+            });
+        } catch (e) {
+            Alert.alert('Error', 'Failed to send message');
+            setInputText(text);
+        }
+    };
+
+    const handleLocationShare = async () => {
+        setAttachmentModalVisible(false);
+        try {
+            await chatService.sendMessage({
+                conversation_id: id!,
+                sender_phone: userPhone || 'Unknown',
+                location_data: {
+                    latitude: 31.5204,
+                    longitude: 74.3587,
+                    address: 'Lahore, Pakistan'
+                }
+            });
+        } catch (e) {
+            Alert.alert('Error', 'Failed to share location');
+        }
+    };
+
+    const handleAttachmentAction = (type: 'camera' | 'image' | 'video' | 'audio' | 'location') => {
+        setAttachmentModalVisible(false);
+        if (type === 'location') {
+            handleLocationShare();
+        } else if (type === 'camera' || type === 'image' || type === 'video') {
+            handleMediaPick(type);
+        } else if (type === 'audio') {
+            Alert.alert('Notice', 'Voice recording is available via the mic icon.');
+        }
+    };
+
+    const handleMediaPick = async (type: 'camera' | 'image' | 'video') => {
+        let result: ImagePicker.ImagePickerResult;
+        if (type === 'camera') {
+            const permission = await ImagePicker.requestCameraPermissionsAsync();
+            if (!permission.granted) return Alert.alert('Permission Denied', 'Camera permission is required.');
+            result = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.8 });
+        } else {
+            result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: type === 'video' ? ImagePicker.MediaTypeOptions.Videos : ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                quality: 0.8,
+            });
+        }
 
         if (!result.canceled) {
-            const newMsg: Message = {
-                id: Date.now().toString(),
-                image: result.assets[0].uri,
-                sender: 'user',
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            };
-            setMessages((prev) => [...prev, newMsg]);
+            const asset = result.assets[0];
+            try {
+                const { publicUrl, error } = await storageService.uploadImage(asset.uri, 'chat-media');
+                if (error) throw new Error(error);
+
+                await chatService.sendMessage({
+                    conversation_id: id!,
+                    sender_phone: userPhone || 'Unknown',
+                    image_url: type !== 'video' ? publicUrl : undefined,
+                    metadata: type === 'video' ? { video_url: publicUrl } : undefined
+                });
+            } catch (e) {
+                Alert.alert('Upload Failed', 'Could not send media.');
+            }
         }
     };
 
@@ -81,14 +161,10 @@ export default function ChatDetailScreen() {
                 const permission = await requestAudioPermission();
                 if (!permission.granted) return;
             }
-            await Audio.setAudioModeAsync({
-                allowsRecordingIOS: true,
-                playsInSilentModeIOS: true,
-            });
-            const { recording } = await Audio.Recording.createAsync(
-                Audio.RecordingOptionsPresets.HIGH_QUALITY
-            );
+            await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+            const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
             setRecording(recording);
+            setIsRecording(true);
         } catch (err) {
             console.error('Failed to start recording', err);
         }
@@ -96,86 +172,127 @@ export default function ChatDetailScreen() {
 
     async function stopRecording() {
         if (!recording) return;
+        setIsRecording(false);
         setRecording(undefined);
         await recording.stopAndUnloadAsync();
         const uri = recording.getURI();
+
         if (uri) {
-            const newMsg: Message = {
-                id: Date.now().toString(),
-                audio: uri,
-                sender: 'user',
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            };
-            setMessages((prev) => [...prev, newMsg]);
+            try {
+                const { publicUrl, error } = await storageService.uploadImage(uri, 'chat-media');
+                if (error) throw new Error(error);
+
+                await chatService.sendMessage({
+                    conversation_id: id!,
+                    sender_phone: userPhone || 'Unknown',
+                    audio_url: publicUrl,
+                    metadata: { type: 'voice_note' }
+                });
+            } catch (e) {
+                Alert.alert('Error', 'Failed to send voice note');
+            }
         }
     }
 
     const playSound = async (uri: string) => {
         try {
-            // Stop previous sound if any
-            if (sound) {
-                await sound.unloadAsync();
-            }
-            const { sound: newSound } = await Audio.Sound.createAsync({ uri });
+            if (sound) await sound.unloadAsync();
+            const { sound: newSound } = await Audio.Sound.createAsync({ uri }, { shouldPlay: true });
             setSound(newSound);
-            await newSound.playAsync();
         } catch (e) {
-            console.log("Error playing sound", e);
+            Alert.alert("Playback Error", "Could not play audio.");
         }
     };
 
     const handleCallAction = () => {
-        Alert.alert(
-            "Call Options",
-            "Choose a method to call",
-            [
+        if (Platform.OS === 'ios') {
+            ActionSheetIOS.showActionSheetWithOptions(
                 {
-                    text: "Call from App",
-                    onPress: () => router.push({ pathname: '/chat/call-screen', params: { name } })
+                    options: ['Cancel', 'Call from App', 'Call from Phone'],
+                    cancelButtonIndex: 0,
                 },
-                {
-                    text: "Call from Phone",
-                    onPress: () => Linking.openURL('tel:1234567890')
-                },
-                {
-                    text: "Cancel",
-                    style: "cancel"
+                (buttonIndex) => {
+                    if (buttonIndex === 1) router.push({ pathname: '/chat/call-screen', params: { name } });
+                    if (buttonIndex === 2) Linking.openURL('tel:1234567890');
                 }
-            ]
-        );
+            );
+        } else {
+            Alert.alert(
+                "Call Options",
+                "Choose a method to call",
+                [
+                    {
+                        text: "Call from App",
+                        onPress: () => router.push({ pathname: '/chat/call-screen', params: { name } })
+                    },
+                    {
+                        text: "Call from Phone",
+                        onPress: () => Linking.openURL('tel:1234567890')
+                    },
+                    {
+                        text: "Cancel",
+                        style: "cancel"
+                    }
+                ]
+            );
+        }
     };
 
-    const renderMessage = ({ item }: { item: Message }) => {
-        const isUser = item.sender === 'user';
+    const renderMessage = ({ item }: { item: ChatMessage }) => {
+        const isUser = item.sender_phone === userPhone;
+        const time = new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
         return (
             <View style={[styles.msgContainer, isUser ? styles.msgRight : styles.msgLeft]}>
-                {/* Sender Name if needed, skipping for cleaner look */}
-
                 <View style={[styles.bubble, isUser ? styles.bubbleRight : styles.bubbleLeft]}>
-                    {item.text && <Text style={[styles.msgText, isUser ? styles.textRight : styles.textLeft]}>{item.text}</Text>}
-                    {item.image && (
-                        <Image source={{ uri: item.image }} style={styles.msgImage} />
+                    {item.content && <Text style={[styles.msgText, isUser ? styles.textRight : styles.textLeft]}>{item.content}</Text>}
+
+                    {item.image_url && (
+                        <TouchableOpacity activeOpacity={0.9} onPress={() => {/* View Image Logic */ }}>
+                            <Image source={{ uri: item.image_url }} style={styles.msgImage} />
+                        </TouchableOpacity>
                     )}
-                    {item.audio && (
+
+                    {item.location_data && (
+                        <TouchableOpacity
+                            style={styles.locationContainer}
+                            onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${item.location_data.latitude},${item.location_data.longitude}`)}
+                        >
+                            <View style={styles.locationHeader}>
+                                <Ionicons name="location" size={20} color={isUser ? '#FFF' : '#600E10'} />
+                                <Text style={[styles.locationTitle, isUser && { color: '#FFF' }]}>Shared Location</Text>
+                            </View>
+                            <Text style={[styles.locationAddress, isUser && { color: '#EEE' }]}>{item.location_data.address}</Text>
+                        </TouchableOpacity>
+                    )}
+
+                    {item.audio_url && (
                         <View style={styles.audioRow}>
-                            <Pressable onPress={() => playSound(item.audio!)}>
+                            <Pressable onPress={() => playSound(item.audio_url!)}>
                                 <Ionicons name="play-circle" size={32} color={isUser ? '#FFF' : '#333'} />
                             </Pressable>
                             <View style={styles.audioWaveStub}>
-                                <View style={[styles.bar, { height: 10 }]} />
-                                <View style={[styles.bar, { height: 16 }]} />
-                                <View style={[styles.bar, { height: 8 }]} />
-                                <View style={[styles.bar, { height: 20 }]} />
-                                <View style={[styles.bar, { height: 12 }]} />
+                                <View style={[styles.bar, { height: 10, backgroundColor: isUser ? 'rgba(255,255,255,0.7)' : '#999' }]} />
+                                <View style={[styles.bar, { height: 16, backgroundColor: isUser ? 'rgba(255,255,255,0.7)' : '#999' }]} />
+                                <View style={[styles.bar, { height: 8, backgroundColor: isUser ? 'rgba(255,255,255,0.7)' : '#999' }]} />
+                                <View style={[styles.bar, { height: 20, backgroundColor: isUser ? 'rgba(255,255,255,0.7)' : '#999' }]} />
+                                <View style={[styles.bar, { height: 12, backgroundColor: isUser ? 'rgba(255,255,255,0.7)' : '#999' }]} />
                             </View>
-                            <Text style={[styles.audioDuration, isUser ? { color: '#EEE' } : { color: '#666' }]}>0:05</Text>
                         </View>
                     )}
                 </View>
-                <Text style={styles.msgTime}>{item.time}</Text>
+                <Text style={styles.msgTime}>{time}</Text>
             </View>
         );
     };
+
+    if (loading) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color="#600E10" />
+            </View>
+        );
+    }
 
     return (
         <KeyboardAvoidingView
@@ -186,16 +303,16 @@ export default function ChatDetailScreen() {
             <StatusBar style="dark" />
 
             {/* Header */}
-            <View style={styles.header}>
+            <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
                 <Pressable onPress={() => router.back()} style={styles.backBtn}>
                     <Ionicons name="chevron-back" size={28} color="#600E10" />
                 </Pressable>
 
                 <View style={styles.headerInfo}>
-                    <Text style={styles.headerTitle}>Chats</Text>
+                    <Text style={styles.headerTitle} numberOfLines={1}>{name || 'Chat'}</Text>
                     <View style={styles.statusRow}>
                         <View style={styles.statusDot} />
-                        <Text style={styles.statusText}>Agent online</Text>
+                        <Text style={styles.statusText}>Online</Text>
                     </View>
                 </View>
 
@@ -217,33 +334,51 @@ export default function ChatDetailScreen() {
                 renderItem={renderMessage}
                 contentContainerStyle={styles.listContent}
                 showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="interactive"
             />
 
-            {/* Quick Replies (Static for now) */}
-            <View style={styles.quickReplies}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingRight: 20 }}>
-                    <Pressable style={styles.chip}><Text style={styles.chipText}>Help with order</Text></Pressable>
-                    <Pressable style={styles.chip}><Text style={styles.chipText}>Payment issue</Text></Pressable>
-                    <Pressable style={styles.chip}><Text style={styles.chipText}>Technical problem</Text></Pressable>
-                </ScrollView>
-            </View>
+            {/* Recording Indicator Overlay */}
+            {isRecording && (
+                <View style={styles.recordingOverlay}>
+                    <View style={styles.recordingIndicator}>
+                        <Ionicons name="mic" size={24} color="#FFF" style={styles.recordingIconBlink} />
+                        <Text style={styles.recordingText}>Recording...</Text>
+                    </View>
+                </View>
+            )}
+
+            {/* Quick Replies */}
+            {!isRecording && (
+                <View style={styles.quickReplies}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingRight: 20 }}>
+                        <Pressable style={styles.chip}><Text style={styles.chipText}>Help with order</Text></Pressable>
+                        <Pressable style={styles.chip}><Text style={styles.chipText}>Payment issue</Text></Pressable>
+                        <Pressable style={styles.chip}><Text style={styles.chipText}>Technical problem</Text></Pressable>
+                    </ScrollView>
+                </View>
+            )}
 
             {/* Input */}
-            <View style={styles.inputArea}>
-                <Pressable style={styles.attachBtn}>
-                    <Ionicons name="attach" size={24} color="#666" />
-                </Pressable>
-                <Pressable onPress={handleImagePick} style={styles.attachBtn}>
-                    <Ionicons name="image-outline" size={24} color="#666" />
+            <View style={[styles.inputArea, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+                {/* Attachment Button */}
+                <Pressable
+                    onPress={() => setAttachmentModalVisible(true)}
+                    style={styles.attachBtn}
+                    disabled={isRecording}
+                >
+                    <Ionicons name="add-circle-outline" size={28} color="#600E10" />
                 </Pressable>
 
                 <View style={styles.inputWrapper}>
                     <TextInput
                         style={styles.input}
-                        placeholder="Type your message..."
+                        placeholder="Type a message..."
                         value={inputText}
                         onChangeText={setInputText}
                         multiline
+                        maxLength={500}
+                        editable={!isRecording}
                     />
                 </View>
 
@@ -253,17 +388,80 @@ export default function ChatDetailScreen() {
                     </Pressable>
                 ) : (
                     <Pressable
-                        onPressIn={startRecording}
+                        onLongPress={startRecording}
                         onPressOut={stopRecording}
-                        style={[styles.micBtn, recording && styles.micActive]}
+                        delayLongPress={200}
+                        style={[styles.micBtn, isRecording && styles.micActive]}
                     >
-                        <Ionicons name={recording ? "mic" : "mic-outline"} size={22} color="#FFF" />
+                        <Ionicons name={isRecording ? "mic" : "mic-outline"} size={22} color="#FFF" />
                     </Pressable>
                 )}
             </View>
+
+            {/* Attachments Modal */}
+            <Modal
+                transparent={true}
+                visible={attachmentModalVisible}
+                animationType="fade"
+                onRequestClose={() => setAttachmentModalVisible(false)}
+            >
+                <Pressable style={styles.modalOverlay} onPress={() => setAttachmentModalVisible(false)}>
+                    <View style={styles.attachmentSheet}>
+                        <View style={styles.sheetHandle} />
+                        <Text style={styles.sheetTitle}>Share Content</Text>
+
+                        <View style={styles.attachmentGrid}>
+                            <AttachmentOption
+                                icon="camera"
+                                label="Camera"
+                                color="#E91E63"
+                                onPress={() => handleAttachmentAction('camera')}
+                            />
+                            <AttachmentOption
+                                icon="image"
+                                label="Gallery"
+                                color="#9C27B0"
+                                onPress={() => handleAttachmentAction('image')}
+                            />
+                            <AttachmentOption
+                                icon="videocam"
+                                label="Video"
+                                color="#2196F3"
+                                onPress={() => handleAttachmentAction('video')}
+                            />
+                            <AttachmentOption
+                                icon="musical-notes"
+                                label="Audio"
+                                color="#FF9800"
+                                onPress={() => handleAttachmentAction('audio')}
+                            />
+                            <AttachmentOption
+                                icon="location"
+                                label="Location"
+                                color="#4CAF50"
+                                onPress={() => handleAttachmentAction('location')}
+                            />
+                        </View>
+
+                        <Pressable style={styles.cancelBtn} onPress={() => setAttachmentModalVisible(false)}>
+                            <Text style={styles.cancelBtnText}>Cancel</Text>
+                        </Pressable>
+                    </View>
+                </Pressable>
+            </Modal>
+
         </KeyboardAvoidingView>
     );
 }
+
+const AttachmentOption = ({ icon, label, color, onPress }: { icon: any, label: string, color: string, onPress: () => void }) => (
+    <Pressable style={styles.attachmentItem} onPress={onPress}>
+        <View style={[styles.attachmentIcon, { backgroundColor: color + '20' }]}>
+            <Ionicons name={icon} size={28} color={color} />
+        </View>
+        <Text style={styles.attachmentLabel}>{label}</Text>
+    </Pressable>
+);
 
 const styles = StyleSheet.create({
     container: {
@@ -273,19 +471,21 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingTop: 50,
         paddingBottom: 15,
         paddingHorizontal: 15,
         backgroundColor: '#F4F7FC',
+        borderBottomWidth: 1,
+        borderBottomColor: '#E0E0E0',
     },
     backBtn: {
         marginRight: 10,
+        padding: 5,
     },
     headerInfo: {
         flex: 1,
     },
     headerTitle: {
-        fontSize: 24,
+        fontSize: 18,
         fontFamily: 'Poppins_700Bold',
         color: '#600E10',
     },
@@ -303,30 +503,28 @@ const styles = StyleSheet.create({
     statusText: {
         fontSize: 12,
         color: '#4CAF50',
+        fontFamily: 'Poppins_400Regular',
     },
     headerActions: {
         flexDirection: 'row',
-        gap: 15,
+        gap: 10,
     },
     iconCircle: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
         backgroundColor: '#FFF',
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 2,
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
     },
     listContent: {
-        padding: 20,
-        paddingBottom: 10,
+        padding: 15,
+        paddingBottom: 20,
     },
     msgContainer: {
-        marginBottom: 20,
+        marginBottom: 15,
         width: '100%',
     },
     msgLeft: {
@@ -336,9 +534,9 @@ const styles = StyleSheet.create({
         alignItems: 'flex-end',
     },
     bubble: {
-        maxWidth: '80%',
-        padding: 16,
-        borderRadius: 20,
+        maxWidth: '75%',
+        padding: 12,
+        borderRadius: 16,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.05,
@@ -350,12 +548,13 @@ const styles = StyleSheet.create({
         borderTopLeftRadius: 4,
     },
     bubbleRight: {
-        backgroundColor: '#FF5722', // Orange
+        backgroundColor: '#600E10', // Updated to Dark Red
         borderTopRightRadius: 4,
     },
     msgText: {
         fontSize: 15,
         fontFamily: 'Poppins_400Regular',
+        lineHeight: 22,
     },
     textLeft: {
         color: '#1A1A1A',
@@ -364,104 +563,230 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
     },
     msgImage: {
-        width: 200,
-        height: 150,
+        width: 220,
+        height: 160,
         borderRadius: 12,
+        backgroundColor: '#EEE'
+    },
+    videoStub: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        padding: 5
+    },
+    videoText: {
+        fontSize: 14,
+        fontFamily: 'Poppins_500Medium',
     },
     msgTime: {
-        fontSize: 11,
+        fontSize: 10,
         color: '#999',
-        marginTop: 5,
+        marginTop: 4,
         marginHorizontal: 5,
+        fontFamily: 'Poppins_400Regular',
+    },
+    // Location
+    locationContainer: {
+        width: 200,
+        padding: 5,
+    },
+    locationHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 5,
+    },
+    locationTitle: {
+        fontSize: 14,
+        fontFamily: 'Poppins_600SemiBold',
+        color: '#600E10',
+    },
+    locationAddress: {
+        fontSize: 12,
+        fontFamily: 'Poppins_400Regular',
+        color: '#666',
     },
     // Audio
     audioRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
+        gap: 8,
+        paddingVertical: 4,
+        minWidth: 150
     },
     audioWaveStub: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 3,
+        flex: 1,
+        justifyContent: 'center'
     },
     bar: {
         width: 3,
-        backgroundColor: 'rgba(255,255,255,0.6)',
         borderRadius: 2,
     },
     audioDuration: {
-        fontSize: 12,
+        fontSize: 11,
         marginLeft: 5,
+        fontFamily: 'Poppins_400Regular',
+    },
+    // Recording UI
+    recordingOverlay: {
+        position: 'absolute',
+        bottom: 100,
+        alignSelf: 'center',
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        padding: 15,
+        borderRadius: 30,
+    },
+    recordingIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    recordingIconBlink: {
+        opacity: 0.9,
+    },
+    recordingText: {
+        color: '#FFF',
+        fontSize: 14,
+        fontFamily: 'Poppins_600SemiBold',
     },
     // Quick Replies
     quickReplies: {
-        height: 50,
-        paddingHorizontal: 20,
-        marginBottom: 5,
+        height: 44,
+        paddingHorizontal: 15,
+        marginBottom: 8,
     },
     chip: {
-        backgroundColor: '#D1E4FF',
-        paddingVertical: 8,
-        paddingHorizontal: 16,
+        backgroundColor: '#E3F2FD',
+        paddingVertical: 6,
+        paddingHorizontal: 14,
         borderRadius: 20,
-        marginRight: 10,
+        marginRight: 8,
+        borderWidth: 1,
+        borderColor: '#BBDEFB',
     },
     chipText: {
-        fontSize: 13,
-        color: '#1A1A1A',
+        fontSize: 12,
+        color: '#1565C0',
         fontFamily: 'Poppins_500Medium',
     },
     // Input
     inputArea: {
         flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 10,
-        paddingHorizontal: 15,
-        backgroundColor: '#F4F7FC',
+        alignItems: 'flex-end', // Align bottom for multiline growth
+        paddingTop: 10,
+        paddingHorizontal: 10,
+        backgroundColor: '#FFFFFF',
+        borderTopWidth: 1,
+        borderTopColor: '#F0F0F0',
     },
     attachBtn: {
-        padding: 8,
+        padding: 10,
+        marginBottom: 2,
     },
     inputWrapper: {
         flex: 1,
-        backgroundColor: '#E8F0FE', // Light blue
-        borderRadius: 25,
-        marginHorizontal: 10,
+        backgroundColor: '#F5F5F5',
+        borderRadius: 24,
+        marginHorizontal: 5,
         paddingHorizontal: 15,
-        paddingVertical: 5,
-        borderWidth: 1,
-        borderColor: '#D0D0D0',
+        paddingVertical: 8, // Fixed padding
+        marginBottom: 6, // Align with buttons
+        minHeight: 40,
+        maxHeight: 120,
     },
     input: {
-        fontSize: 16,
-        maxHeight: 100,
+        fontSize: 15,
         color: '#1A1A1A',
         fontFamily: 'Poppins_400Regular',
+        padding: 0, // Remove default Android padding
     },
     sendBtn: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        backgroundColor: '#2E7D32', // Green
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: '#600E10',
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-        elevation: 4,
+        marginBottom: 4,
+        marginLeft: 4,
     },
     micBtn: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        backgroundColor: '#2E7D32', // Green
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: '#600E10',
         justifyContent: 'center',
         alignItems: 'center',
+        marginBottom: 4,
+        marginLeft: 4,
     },
     micActive: {
         backgroundColor: '#D32F2F',
         transform: [{ scale: 1.1 }],
     },
+    // Modal
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'flex-end',
+    },
+    attachmentSheet: {
+        backgroundColor: '#FFF',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        padding: 20,
+        paddingBottom: 40,
+    },
+    sheetHandle: {
+        width: 40,
+        height: 5,
+        backgroundColor: '#E0E0E0',
+        borderRadius: 3,
+        alignSelf: 'center',
+        marginBottom: 15,
+    },
+    sheetTitle: {
+        fontSize: 18,
+        fontFamily: 'Poppins_700Bold',
+        color: '#1A1A1A',
+        marginBottom: 20,
+        textAlign: 'center',
+    },
+    attachmentGrid: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        flexWrap: 'wrap',
+        marginBottom: 20,
+    },
+    attachmentItem: {
+        alignItems: 'center',
+        gap: 8,
+        width: '22%',
+    },
+    attachmentIcon: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    attachmentLabel: {
+        fontSize: 12,
+        fontFamily: 'Poppins_500Medium',
+        color: '#333',
+    },
+    cancelBtn: {
+        backgroundColor: '#F5F5F5',
+        paddingVertical: 15,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    cancelBtnText: {
+        fontSize: 16,
+        fontFamily: 'Poppins_600SemiBold',
+        color: '#600E10',
+    }
 });

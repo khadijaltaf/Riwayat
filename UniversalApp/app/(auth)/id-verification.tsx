@@ -1,13 +1,35 @@
 
 import React, { useState } from 'react';
-import { StyleSheet, View, TextInput, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import { StyleSheet, View, TextInput, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView, Alert, Image, Keyboard } from 'react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
+import * as ImagePicker from 'expo-image-picker';
+import { supabase } from '@/lib/supabase';
+import { storageService } from '@/services/storage-service';
 
 export default function IDVerificationScreen() {
     const [cnic, setCnic] = useState('');
+    const [ntn, setNtn] = useState('');
+    const [hasFoodLicense, setHasFoodLicense] = useState<boolean | null>(null);
+    const [cnicImage, setCnicImage] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
+    const { phone } = useLocalSearchParams<{ phone: string }>();
     const router = useRouter();
+
+    const pickImage = async () => {
+        Keyboard.dismiss();
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [4, 3],
+            quality: 1,
+        });
+
+        if (!result.canceled) {
+            setCnicImage(result.assets[0].uri);
+        }
+    };
 
     const formatCNIC = (text: string) => {
         const cleaned = text.replace(/\D/g, '');
@@ -28,13 +50,43 @@ export default function IDVerificationScreen() {
         }
     };
 
-    const handleContinue = () => {
-        // Validation removed for testing
-        // const digitsOnly = cnic.replace(/\D/g, '');
-        // if (digitsOnly.length < 13) return Alert.alert('Error', 'Please enter a valid 13-digit CNIC number');
+    const handleContinue = async () => {
+        Keyboard.dismiss();
+        const digitsOnly = cnic.replace(/\D/g, '');
+        if (digitsOnly.length < 13) return Alert.alert('Error', 'Please enter a valid 13-digit CNIC number');
+        if (!cnicImage) return Alert.alert('Error', 'Please upload your CNIC photo');
 
-        // Navigate to Screen 12: Review Summary
-        router.push('/(auth)/review-summary');
+        setLoading(true);
+
+        try {
+            let cnicUrl = '';
+
+            // 1. Upload Image to Supabase Storage
+            if (cnicImage) {
+                const { publicUrl, error: uploadError } = await storageService.uploadImage(cnicImage, 'kitchen-media');
+                if (uploadError) throw new Error(`Upload failed: ${uploadError}`);
+                cnicUrl = publicUrl || '';
+            }
+
+            // 2. Save Data to Supabase Database
+            const { error } = await supabase.from('onboarding_sessions').update({
+                cnic_number: cnic,
+                cnic_image_url: cnicUrl,
+                ntn_number: ntn,
+                has_food_license: hasFoodLicense,
+                updated_at: new Date()
+            }).eq('phone', phone);
+
+            if (error) throw error;
+
+            // Navigate to Screen 12: Review Summary
+            router.push({ pathname: '/(auth)/review-summary', params: { phone } });
+        } catch (e: any) {
+            console.error(e);
+            Alert.alert('Error', e.message || 'Something went wrong while saving.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -43,7 +95,7 @@ export default function IDVerificationScreen() {
             style={styles.container}
         >
             <StatusBar style="dark" />
-            <ScrollView contentContainerStyle={styles.scrollContent}>
+            <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
                 {/* Header */}
                 <View style={styles.header}>
                     <Text style={styles.stepText}>5/6</Text>
@@ -68,35 +120,59 @@ export default function IDVerificationScreen() {
                         </Pressable>
                     </View>
 
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.label}>CNIC Number</Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="35202-0000000-0"
+                            value={cnic}
+                            onChangeText={handleCnicChange}
+                            keyboardType="number-pad"
+                            maxLength={15}
+                            placeholderTextColor="#999"
+                        />
+                    </View>
+
                     <View style={styles.uploadSection}>
                         <Text style={styles.label}>Upload CNIC</Text>
-                        <Pressable style={styles.uploadBox}>
-                            <View style={styles.uploadIconCircle}>
-                                <Ionicons name="cloud-upload-outline" size={30} color="#600E10" />
-                            </View>
-                            <Text style={styles.uploadTip}>Upload clear photo of your CNIC</Text>
+                        <Pressable style={styles.uploadBox} onPress={pickImage}>
+                            {cnicImage ? (
+                                <Image source={{ uri: cnicImage }} style={styles.uploadedImage} />
+                            ) : (
+                                <>
+                                    <View style={styles.uploadIconCircle}>
+                                        <Ionicons name="cloud-upload-outline" size={30} color="#600E10" />
+                                    </View>
+                                    <Text style={styles.uploadTip}>Upload clear photo of your CNIC</Text>
+                                </>
+                            )}
                         </Pressable>
                     </View>
 
                     <View style={styles.inputGroup}>
                         <Text style={styles.label}>NTN Number (Optional)</Text>
-                        <Pressable style={styles.dropdown}>
-                            <Text style={styles.placeholderText}>--Select--</Text>
-                            <Ionicons name="chevron-down" size={20} color="#1A1A1A" />
-                        </Pressable>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Enter NTN"
+                            value={ntn}
+                            onChangeText={setNtn}
+                            placeholderTextColor="#999"
+                        />
                     </View>
 
                     <View style={styles.inputGroup}>
                         <Text style={styles.label}>Do u have food license?</Text>
                         <View style={styles.radioRow}>
-                            <Pressable style={styles.radioButton}>
-                                <View style={[styles.radioCircle, styles.radioSelected]}>
-                                    <View style={styles.radioInner} />
+                            <Pressable style={styles.radioButton} onPress={() => setHasFoodLicense(true)}>
+                                <View style={[styles.radioCircle, hasFoodLicense === true && styles.radioSelected]}>
+                                    {hasFoodLicense === true && <View style={styles.radioInner} />}
                                 </View>
                                 <Text style={styles.radioLabel}>YES</Text>
                             </Pressable>
-                            <Pressable style={styles.radioButton}>
-                                <View style={styles.radioCircle} />
+                            <Pressable style={styles.radioButton} onPress={() => setHasFoodLicense(false)}>
+                                <View style={[styles.radioCircle, hasFoodLicense === false && styles.radioSelected]}>
+                                    {hasFoodLicense === false && <View style={styles.radioInner} />}
+                                </View>
                                 <Text style={styles.radioLabel}>NO</Text>
                             </Pressable>
                         </View>
@@ -116,10 +192,13 @@ export default function IDVerificationScreen() {
                         <Text style={styles.backButtonText}>Back</Text>
                     </Pressable>
                     <Pressable
-                        style={styles.nextButton}
+                        style={[styles.nextButton, (loading || !cnic || !cnicImage) && styles.disabledButton]}
                         onPress={handleContinue}
+                        disabled={loading || !cnic || !cnicImage}
                     >
-                        <Text style={styles.nextButtonText}>Continue</Text>
+                        <Text style={styles.nextButtonText}>
+                            {loading ? 'Processing...' : 'Continue'}
+                        </Text>
                     </Pressable>
                 </View>
             </ScrollView>
@@ -306,7 +385,7 @@ const styles = StyleSheet.create({
     },
     backButton: {
         flex: 1,
-        paddingVertical: 14,
+        paddingVertical: 16,
         borderRadius: 30,
         borderWidth: 1,
         borderColor: '#E0E0E0',
@@ -319,8 +398,8 @@ const styles = StyleSheet.create({
         color: '#1A1A1A',
     },
     nextButton: {
-        flex: 1.5,
-        paddingVertical: 14,
+        flex: 1,
+        paddingVertical: 16,
         borderRadius: 30,
         backgroundColor: '#600E10',
         alignItems: 'center',
@@ -332,5 +411,11 @@ const styles = StyleSheet.create({
     },
     disabledButton: {
         opacity: 0.5,
+    },
+    uploadedImage: {
+        width: '100%',
+        height: '100%',
+        borderRadius: 12,
+        resizeMode: 'cover',
     },
 });

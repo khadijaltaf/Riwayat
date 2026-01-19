@@ -1,94 +1,206 @@
 
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, Pressable, ScrollView, Image, FlatList, ActivityIndicator, Alert } from 'react-native';
+import { StyleSheet, View, Text, Pressable, ScrollView, Image, FlatList, Alert, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
-import * as ImagePicker from 'expo-image-picker';
-import { storageService } from '@/services/storage-service';
 
 const TABS = ['Logo', 'Banners', 'Audios', 'Videos', 'Images'];
 
+// Mock Data
+const MOCK_LOGOS = [
+    { id: '1', type: 'image', uri: 'https://via.placeholder.com/150/FFF0E0/FF5722?text=Logo', status: 'Active' },
+    { id: '2', type: 'image', uri: 'https://via.placeholder.com/150/FF5722/FFFFFF?text=Logo', status: 'Pending' },
+    { id: '3', type: 'image', uri: 'https://via.placeholder.com/150/FF5722/FFFFFF?text=Logo', status: 'Pending' },
+    { id: '4', type: 'image', uri: 'https://via.placeholder.com/150/FF5722/FFFFFF?text=Logo', status: 'Pending' },
+];
+
+const MOCK_BANNERS = [
+    { id: '1', type: 'placeholder', title: 'Banner', status: 'Active' },
+    { id: '2', type: 'placeholder', title: 'Banner', status: 'Pending' },
+    { id: '3', type: 'placeholder', title: 'Banner', status: 'Pending' },
+    { id: '4', type: 'placeholder', title: 'Banner', status: 'Pending' },
+];
+
+const MOCK_AUDIOS = [
+    { id: '1', type: 'audio', status: 'Active' },
+    { id: '2', type: 'audio', status: 'Pending' },
+    { id: '3', type: 'audio', status: 'Pending' },
+    { id: '4', type: 'audio', status: 'Pending' },
+];
+
+const MOCK_VIDEOS = [
+    { id: '1', type: 'video', status: 'Active' },
+    { id: '2', type: 'video', status: 'Pending' },
+    { id: '3', type: 'video', status: 'Pending' },
+    { id: '4', type: 'video', status: 'Pending' },
+];
+
+const MOCK_GALLERY = Array(12).fill(0).map((_, i) => ({
+    id: String(i),
+    uri: `https://via.placeholder.com/300/E0E0E0/999?text=Kitchen+${i + 1}`,
+}));
+
 export default function KitchenMediaScreen() {
-    const [activeTab, setActiveTab] = useState('Images');
-    const [uploading, setUploading] = useState(false);
-    const [mediaList, setMediaList] = useState<string[]>([]);
     const router = useRouter();
+    const [activeTab, setActiveTab] = useState('Images'); // Default as per one screenshot, or Logo
+    const { width } = useWindowDimensions();
 
-    const handleUpload = async () => {
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
-            allowsEditing: true,
-            aspect: [16, 9],
-            quality: 0.8,
-        });
+    const handleUpload = () => {
+        Alert.alert("Upload", `Trigger upload for ${activeTab}`);
+    };
 
-        if (!result.canceled && result.assets[0].uri) {
-            setUploading(true);
-            const { publicUrl, error } = await storageService.uploadImage(result.assets[0].uri);
-            setUploading(false);
-
-            if (error) {
-                Alert.alert('Upload Failed', error);
-            } else if (publicUrl) {
-                setMediaList([publicUrl, ...mediaList]);
-                Alert.alert('Success', 'Media uploaded successfully!');
-            }
+    const renderContent = () => {
+        switch (activeTab) {
+            case 'Images':
+                return (
+                    <View style={styles.cardContainer}>
+                        <View style={styles.gridContainer}>
+                            {MOCK_GALLERY.map((img) => (
+                                <Image
+                                    key={img.id}
+                                    source={{ uri: img.uri }}
+                                    style={styles.galleryImage}
+                                />
+                            ))}
+                        </View>
+                    </View>
+                );
+            case 'Logo':
+                return (
+                    <View style={styles.cardContainer}>
+                        <View style={styles.rowContainer}>
+                            {MOCK_LOGOS.map((item) => (
+                                <Pressable
+                                    key={item.id}
+                                    style={styles.itemWrapper}
+                                    onPress={() => router.push({ pathname: "/kitchen/media/detail", params: { type: 'logo', id: item.id } })}
+                                >
+                                    <View style={styles.logoCard}>
+                                        <Image source={{ uri: item.uri }} style={styles.logoImage} resizeMode="contain" />
+                                    </View>
+                                    <Text style={[styles.statusText, item.status === 'Active' ? styles.activeText : styles.pendingText]}>
+                                        {item.status}
+                                    </Text>
+                                </Pressable>
+                            ))}
+                        </View>
+                    </View>
+                );
+            case 'Banners':
+                return (
+                    <View style={styles.cardContainer}>
+                        <View style={styles.rowContainer}>
+                            {MOCK_BANNERS.map((item) => (
+                                <View key={item.id} style={styles.itemWrapper}>
+                                    <View style={[styles.placeholderCard, { backgroundColor: '#F26925' }]}>
+                                        <Text style={styles.placeholderText}>{item.title}</Text>
+                                    </View>
+                                    <Text style={[styles.statusText, item.status === 'Active' ? styles.activeText : styles.pendingText]}>
+                                        {item.status}
+                                    </Text>
+                                </View>
+                            ))}
+                        </View>
+                    </View>
+                );
+            case 'Audios':
+                return (
+                    <View style={styles.cardContainer}>
+                        <View style={styles.rowContainer}>
+                            {MOCK_AUDIOS.map((item) => (
+                                <View key={item.id} style={styles.itemWrapper}>
+                                    <View style={[styles.placeholderCard, { backgroundColor: '#F26925' }]}>
+                                        <Ionicons name="musical-note" size={32} color="#FFF" />
+                                    </View>
+                                    <Text style={[styles.statusText, item.status === 'Active' ? styles.activeText : styles.pendingText]}>
+                                        {item.status}
+                                    </Text>
+                                </View>
+                            ))}
+                        </View>
+                    </View>
+                );
+            case 'Videos':
+                return (
+                    <View style={styles.cardContainer}>
+                        <View style={styles.rowContainer}>
+                            {MOCK_VIDEOS.map((item) => (
+                                <Pressable
+                                    key={item.id}
+                                    style={styles.itemWrapper}
+                                    onPress={() => router.push({ pathname: "/kitchen/media/detail", params: { type: 'video', id: item.id } })}
+                                >
+                                    <View style={[styles.placeholderCard, { backgroundColor: '#F26925' }]}>
+                                        <Ionicons name="videocam" size={32} color="#FFF" />
+                                    </View>
+                                    <Text style={[styles.statusText, item.status === 'Active' ? styles.activeText : styles.pendingText]}>
+                                        {item.status}
+                                    </Text>
+                                </Pressable>
+                            ))}
+                        </View>
+                    </View>
+                );
+            default:
+                return null;
         }
+    };
+
+    const getNoteText = () => {
+        if (activeTab === 'Images') return "You can add many Images.";
+        return `You can add many ${activeTab}, but only one can be active.`;
     };
 
     return (
         <View style={styles.container}>
             <StatusBar style="dark" />
+
+            {/* Header */}
             <View style={styles.header}>
-                <Pressable onPress={() => router.back()} style={styles.backButton}>
-                    <Ionicons name="chevron-back" size={28} color="#5C1414" />
+                <Pressable onPress={() => router.back()} style={styles.backBtn}>
+                    <Ionicons name="chevron-back" size={28} color="#600E10" />
                 </Pressable>
                 <Text style={styles.headerTitle}>Kitchen Media</Text>
+                <View style={{ width: 28 }} />
             </View>
 
-            {/* Category Tabs */}
-            <View style={styles.tabsContainer}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsScroll}>
-                    {TABS.map((tab) => (
-                        <Pressable
-                            key={tab}
-                            style={[styles.tab, activeTab === tab && styles.activeTab]}
-                            onPress={() => setActiveTab(tab)}
-                        >
-                            <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>{tab}</Text>
-                        </Pressable>
-                    ))}
+            {/* Tab Navigation */}
+            <View style={styles.tabsWrapper}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsContainer}>
+                    {TABS.map((tab) => {
+                        const isActive = activeTab === tab;
+                        return (
+                            <Pressable
+                                key={tab}
+                                style={[styles.tabItem, isActive && styles.activeTabItem]}
+                                onPress={() => setActiveTab(tab)}
+                            >
+                                <Text style={[styles.tabText, isActive && styles.activeTabText]}>{tab}</Text>
+                            </Pressable>
+                        )
+                    })}
                 </ScrollView>
             </View>
 
             <ScrollView contentContainerStyle={styles.content}>
+
+                {/* Upload Button */}
                 <View style={styles.uploadRow}>
-                    <Pressable style={styles.uploadButton} onPress={handleUpload} disabled={uploading}>
-                        {uploading ? <ActivityIndicator color="#5C1414" /> : <Text style={styles.uploadButtonText}>Upload</Text>}
+                    <Pressable style={styles.uploadBtn} onPress={handleUpload}>
+                        <Text style={styles.uploadBtnText}>Upload</Text>
                     </Pressable>
                 </View>
 
-                <View style={styles.mediaGrid}>
-                    {mediaList.map((url, index) => (
-                        <View key={index} style={styles.mediaCard}>
-                            <Image source={{ uri: url }} style={styles.mediaImage} />
-                            <View style={styles.statusBadge}>
-                                <Text style={styles.statusText}>Active</Text>
-                            </View>
-                        </View>
-                    ))}
+                {/* Main Content Card */}
+                {renderContent()}
 
-                    {/* Placeholder if empty */}
-                    {mediaList.length === 0 && (
-                        <View style={styles.emptyContainer}>
-                            <Ionicons name="images-outline" size={60} color="#DDD" />
-                            <Text style={styles.emptyText}>No {activeTab.toLowerCase()} uploaded yet</Text>
-                        </View>
-                    )}
-                </View>
+                {/* Note */}
+                <Text style={styles.noteText}>
+                    <Text style={styles.noteLabel}>Note: </Text>
+                    {getNoteText()}
+                </Text>
 
-                <Text style={styles.noteText}>Note: You can add many {activeTab}.</Text>
             </ScrollView>
         </View>
     );
@@ -97,126 +209,151 @@ export default function KitchenMediaScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F4FAFF',
+        backgroundColor: '#F4F7FC',
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 24,
-        paddingTop: 60,
-        paddingBottom: 20,
-        backgroundColor: '#F4FAFF',
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        paddingTop: 50,
+        paddingBottom: 15,
     },
-    backButton: {
-        marginRight: 12,
+    backBtn: {
+        padding: 4,
     },
     headerTitle: {
-        fontSize: 22,
+        fontSize: 20,
         fontFamily: 'Poppins_700Bold',
-        color: '#5C1414',
+        color: '#600E10',
+    },
+    tabsWrapper: {
+        paddingVertical: 10,
     },
     tabsContainer: {
-        marginBottom: 20,
+        paddingHorizontal: 20,
+        gap: 15,
     },
-    tabsScroll: {
-        paddingHorizontal: 24,
-        gap: 12,
-    },
-    tab: {
-        paddingHorizontal: 16,
+    tabItem: {
         paddingVertical: 8,
+        paddingHorizontal: 16,
         borderRadius: 20,
-        backgroundColor: 'transparent',
     },
-    activeTab: {
-        backgroundColor: '#5C1414',
+    activeTabItem: {
+        backgroundColor: '#600E10',
     },
     tabText: {
-        fontSize: 14,
-        fontFamily: 'Poppins_600SemiBold',
-        color: '#666',
+        fontSize: 15,
+        fontFamily: 'Poppins_500Medium',
+        color: '#888',
     },
     activeTabText: {
-        color: '#FFFFFF',
+        color: '#FFF',
     },
     content: {
-        paddingHorizontal: 24,
-        paddingBottom: 40,
+        padding: 20,
     },
     uploadRow: {
-        flexDirection: 'row',
-        justifyContent: 'flex-end',
-        marginBottom: 20,
+        alignItems: 'flex-end',
+        marginBottom: 15,
     },
-    uploadButton: {
-        paddingHorizontal: 24,
-        paddingVertical: 10,
+    uploadBtn: {
+        paddingVertical: 8,
+        paddingHorizontal: 30,
         borderRadius: 20,
+        backgroundColor: '#F4F7FC',
         borderWidth: 1,
-        borderColor: '#E8906C',
-        backgroundColor: '#FFFFFF',
-        minWidth: 100,
-        alignItems: 'center',
+        borderColor: '#600E10',
     },
-    uploadButtonText: {
-        fontSize: 14,
+    uploadBtnText: {
+        color: '#600E10',
         fontFamily: 'Poppins_700Bold',
-        color: '#1A1A1A',
+        fontSize: 13,
     },
-    mediaGrid: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 24,
-        padding: 16,
-        minHeight: 300,
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 12,
+    cardContainer: {
+        backgroundColor: '#FFF',
+        borderRadius: 20,
+        padding: 20,
+        minHeight: 200,
         elevation: 2,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.05,
         shadowRadius: 5,
+        marginBottom: 20,
     },
-    mediaCard: {
-        width: '30%',
+    gridContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'flex-start',
+        gap: 10,
+    },
+    galleryImage: {
+        width: '30%', // roughly 3 columns
         aspectRatio: 1,
         borderRadius: 12,
-        overflow: 'hidden',
-        position: 'relative',
+        backgroundColor: '#EEE',
     },
-    mediaImage: {
+
+    // Row style for Logos/Banners
+    rowContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        gap: 10,
+    },
+    itemWrapper: {
+        width: '22%', // 4 items per row approx
+        alignItems: 'center',
+    },
+    logoCard: {
         width: '100%',
-        height: '100%',
+        aspectRatio: 1,
+        backgroundColor: '#FFF0E0',
+        borderRadius: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 5,
+        marginBottom: 5,
+        borderWidth: 1,
+        borderColor: '#E6E6E6',
     },
-    statusBadge: {
-        position: 'absolute',
-        bottom: 4,
-        left: 4,
-        right: 4,
+    logoImage: {
+        width: '80%',
+        height: '80%',
+    },
+    placeholderCard: {
+        width: '100%',
+        aspectRatio: 1,
+        borderRadius: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 5,
+    },
+    placeholderText: {
+        color: '#FFF',
+        fontSize: 10,
+        fontFamily: 'Poppins_500Medium',
     },
     statusText: {
         fontSize: 10,
-        color: '#4CAF50',
-        textAlign: 'center',
-        fontFamily: 'Poppins_700Bold',
+        fontFamily: 'Poppins_500Medium',
     },
-    emptyContainer: {
-        flex: 1,
-        width: '100%',
-        justifyContent: 'center',
-        alignItems: 'center',
-        paddingVertical: 60,
+    activeText: {
+        color: '#4CAF50', // Green
     },
-    emptyText: {
-        marginTop: 12,
-        fontSize: 14,
-        color: '#999',
-        fontFamily: 'Poppins_400Regular',
+    pendingText: {
+        color: '#FF9800', // Orange
     },
+
     noteText: {
-        marginTop: 20,
-        fontSize: 12,
-        color: '#E8906C',
+        fontSize: 13,
+        fontFamily: 'Poppins_400Regular',
+        color: '#1A1A1A',
+        lineHeight: 20,
+    },
+    noteLabel: {
+        color: '#FF5722', // Orange
         fontFamily: 'Poppins_600SemiBold',
-    }
+    },
 });

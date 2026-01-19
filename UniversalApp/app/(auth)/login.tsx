@@ -35,7 +35,7 @@ export default function LoginScreen() {
             style={styles.container}
         >
             <StatusBar style="dark" />
-            <ScrollView contentContainerStyle={styles.scrollContent}>
+            <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
                 {/* Back Button and Phone Icon */}
                 <View style={styles.header}>
                     <Pressable style={styles.backButton} onPress={() => router.back()}>

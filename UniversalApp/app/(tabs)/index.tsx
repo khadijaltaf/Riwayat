@@ -51,10 +51,11 @@ export default function DashboardScreen() {
   const handleGridAction = (label: string) => {
     if (label === 'Chats') {
       router.push('/chat' as any);
+    } else if (label === 'Feedback') {
+      router.push('/feedback' as any);
     } else if (label === 'view orders') {
-      router.push('/(tabs)/orders'); // internal link
+      router.push('/(tabs)/orders');
     } else {
-      // Placeholder
       console.log(label);
     }
   };

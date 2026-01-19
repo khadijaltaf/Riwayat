@@ -1,16 +1,66 @@
-import React from 'react';
-import { StyleSheet, View, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-import { useRouter } from 'expo-router';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, View, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView, Image, ActivityIndicator, Alert, Keyboard } from 'react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
+import { supabase } from '@/lib/supabase';
 
 export default function ReviewSummaryScreen() {
+    const { phone } = useLocalSearchParams<{ phone: string }>();
+    const [data, setData] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+    const [submitting, setSubmitting] = useState(false);
     const router = useRouter();
 
-    const handleSend = () => {
-        // Navigate to final screen
-        router.push('/(auth)/onboarding-complete');
+    useEffect(() => {
+        fetchSessionData();
+    }, []);
+
+    const fetchSessionData = async () => {
+        try {
+            const { data: session, error } = await supabase
+                .from('onboarding_sessions')
+                .select('*')
+                .eq('phone', phone)
+                .single();
+
+            if (error) throw error;
+            setData(session);
+        } catch (e) {
+            console.error('Error fetching session:', e);
+        } finally {
+            setLoading(false);
+        }
     };
+
+    const handleSend = async () => {
+        Keyboard.dismiss();
+        setSubmitting(true);
+        // Final Status Update
+        try {
+            const { error } = await supabase.from('onboarding_sessions').update({
+                application_status: 'SUBMITTED',
+                updated_at: new Date()
+            }).eq('phone', phone);
+
+            if (error) throw error;
+            // Navigate to final screen
+            router.push('/(auth)/onboarding-complete');
+        } catch (e: any) {
+            console.error(e);
+            Alert.alert('Error', e.message || 'Submission failed');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    if (loading) {
+        return (
+            <View style={[styles.container, styles.center]}>
+                <ActivityIndicator size="large" color="#600E10" />
+            </View>
+        );
+    }
 
     return (
         <KeyboardAvoidingView
@@ -35,10 +85,27 @@ export default function ReviewSummaryScreen() {
 
                 {/* Summary Cards */}
                 <View style={styles.summaryList}>
-                    <SummaryCard title="Owner Details" onEdit={() => router.push('/(auth)/owner-details')} />
-                    <SummaryCard title="Kitchen Details" onEdit={() => router.push('/(auth)/kitchen-details')} />
-                    <SummaryCard title="Kitchen Location" onEdit={() => router.push('/(auth)/location')} />
-                    <SummaryCard title="Identity Documents" onEdit={() => router.push('/(auth)/id-verification')} />
+                    <SummaryCard
+                        title="Owner Details"
+                        details={`${data?.full_name || 'Not provided'}${data?.email ? '\n' + data.email : ''}`}
+                        onEdit={() => router.push({ pathname: '/(auth)/owner-details', params: { phone } })}
+                    />
+                    <SummaryCard
+                        title="Kitchen Details"
+                        details={`${data?.kitchen_name || 'Not provided'}${data?.kitchen_tagline ? '\n' + data.kitchen_tagline : ''}`}
+                        onEdit={() => router.push({ pathname: '/(auth)/kitchen-details', params: { phone } })}
+                    />
+                    <SummaryCard
+                        title="Kitchen Location"
+                        details={`${data?.address || 'Not provided'}, ${data?.area || ''}, ${data?.city || ''}`}
+                        onEdit={() => router.push({ pathname: '/(auth)/location', params: { phone } })}
+                    />
+                    <SummaryCard
+                        title="Identity Documents"
+                        details={`CNIC: ${data?.cnic_number || 'Pending'}${data?.ntn_number ? '\nNTN: ' + data.ntn_number : ''}`}
+                        imageUri={data?.cnic_image_url}
+                        onEdit={() => router.push({ pathname: '/(auth)/id-verification', params: { phone } })}
+                    />
                 </View>
 
                 {/* Footer Buttons */}
@@ -47,10 +114,13 @@ export default function ReviewSummaryScreen() {
                         <Text style={styles.backButtonText}>Back</Text>
                     </Pressable>
                     <Pressable
-                        style={styles.nextButton}
+                        style={[styles.nextButton, submitting && styles.disabledButton]}
                         onPress={handleSend}
+                        disabled={submitting}
                     >
-                        <Text style={styles.nextButtonText}>Send</Text>
+                        <Text style={styles.nextButtonText}>
+                            {submitting ? 'Submitting...' : 'Send'}
+                        </Text>
                     </Pressable>
                 </View>
             </ScrollView>
@@ -58,16 +128,24 @@ export default function ReviewSummaryScreen() {
     );
 }
 
-function SummaryCard({ title, onEdit }: { title: string; onEdit: () => void }) {
+function SummaryCard({ title, details, imageUri, onEdit }: { title: string; details: string; imageUri?: string; onEdit: () => void }) {
     return (
         <View style={styles.summaryCard}>
-            <View style={styles.summaryInfo}>
-                <Ionicons name="checkmark" size={20} color="#2E7D32" />
-                <Text style={styles.summaryTitle}>{title}</Text>
+            <View style={styles.summaryHeader}>
+                <View style={styles.summaryInfo}>
+                    <Ionicons name="checkmark" size={20} color="#2E7D32" />
+                    <Text style={styles.summaryTitle}>{title}</Text>
+                </View>
+                <Pressable onPress={onEdit} style={styles.editButton}>
+                    <Ionicons name="pencil-outline" size={18} color="#600E10" />
+                </Pressable>
             </View>
-            <Pressable onPress={onEdit}>
-                <Ionicons name="pencil-outline" size={20} color="#600E10" />
-            </Pressable>
+            <View style={styles.summaryContent}>
+                <Text style={styles.summaryDetails}>{details}</Text>
+                {imageUri && (
+                    <Image source={{ uri: imageUri }} style={styles.summaryImage} />
+                )}
+            </View>
         </View>
     );
 }
@@ -76,6 +154,10 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#F4FAFF',
+    },
+    center: {
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     scrollContent: {
         padding: 24,
@@ -124,24 +206,51 @@ const styles = StyleSheet.create({
         marginBottom: 40,
     },
     summaryCard: {
+        backgroundColor: '#FFFFFF',
+        padding: 16,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 5,
+        elevation: 2,
+    },
+    summaryHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        backgroundColor: '#FFFFFF',
-        padding: 18,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: '#E0E0E0',
+        marginBottom: 12,
     },
     summaryInfo: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
+        gap: 10,
     },
     summaryTitle: {
         fontSize: 16,
-        fontFamily: 'Poppins_600SemiBold',
+        fontFamily: 'Poppins_700Bold',
         color: '#600E10',
+    },
+    summaryContent: {
+        paddingLeft: 30,
+    },
+    summaryDetails: {
+        fontSize: 14,
+        fontFamily: 'Poppins_400Regular',
+        color: '#4A4A4A',
+        lineHeight: 20,
+    },
+    summaryImage: {
+        width: '100%',
+        height: 120,
+        borderRadius: 8,
+        marginTop: 12,
+        backgroundColor: '#F0F0F0',
+    },
+    editButton: {
+        padding: 4,
     },
     footer: {
         flexDirection: 'row',
@@ -173,5 +282,8 @@ const styles = StyleSheet.create({
         fontSize: 15,
         fontFamily: 'Poppins_700Bold',
         color: '#FFFFFF',
+    },
+    disabledButton: {
+        opacity: 0.5,
     },
 });

@@ -42,7 +42,7 @@ export default function PinSetupScreen() {
             style={styles.container}
         >
             <StatusBar style="dark" />
-            <ScrollView contentContainerStyle={styles.scrollContent}>
+            <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
                 {/* Header */}
                 <View style={styles.header}>
                     <Text style={styles.stepText}>2/6</Text>
@@ -198,7 +198,7 @@ const styles = StyleSheet.create({
     },
     backButton: {
         flex: 1,
-        paddingVertical: 14,
+        paddingVertical: 16,
         borderRadius: 30,
         borderWidth: 1,
         borderColor: '#E0E0E0',
@@ -211,8 +211,8 @@ const styles = StyleSheet.create({
         color: '#1A1A1A',
     },
     nextButton: {
-        flex: 1.5,
-        paddingVertical: 14,
+        flex: 1,
+        paddingVertical: 16,
         borderRadius: 30,
         backgroundColor: '#600E10',
         alignItems: 'center',

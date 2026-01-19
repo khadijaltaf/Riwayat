@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, TextInput, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView, Keyboard } from 'react-native';
+import { StyleSheet, View, TextInput, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView, Keyboard, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
@@ -8,7 +8,7 @@ import CustomModal from '@/components/CustomModal';
 import { supabase } from '@/lib/supabase';
 
 export default function VerifyScreen() {
-    const { phone } = useLocalSearchParams<{ phone: string }>();
+    const { phone, actualOtp } = useLocalSearchParams<{ phone: string; actualOtp: string }>();
     const [otp, setOtp] = useState('');
     const [timer, setTimer] = useState(60);
     const [loading, setLoading] = useState(false);
@@ -29,6 +29,11 @@ export default function VerifyScreen() {
     const handleVerify = async () => {
         Keyboard.dismiss();
         if (otp.length < 4) return alert('Please enter a valid OTP');
+
+        // Check if entered OTP matches the generated one
+        if (otp !== actualOtp) {
+            return Alert.alert('Invalid OTP', 'The verification code you entered is incorrect. Please try again.');
+        }
 
         setLoading(true);
 
@@ -64,7 +69,7 @@ export default function VerifyScreen() {
             style={styles.container}
         >
             <StatusBar style="dark" />
-            <ScrollView contentContainerStyle={styles.scrollContent}>
+            <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
                 {/* Header */}
                 <View style={styles.header}>
                     <Text style={styles.stepText}>1/6</Text>
@@ -245,7 +250,7 @@ const styles = StyleSheet.create({
     },
     backButton: {
         flex: 1,
-        paddingVertical: 14,
+        paddingVertical: 16,
         borderRadius: 30,
         borderWidth: 1,
         borderColor: '#E0E0E0',
@@ -258,8 +263,8 @@ const styles = StyleSheet.create({
         color: '#1A1A1A',
     },
     nextButton: {
-        flex: 1.5,
-        paddingVertical: 14,
+        flex: 1,
+        paddingVertical: 16,
         borderRadius: 30,
         backgroundColor: '#600E10',
         alignItems: 'center',

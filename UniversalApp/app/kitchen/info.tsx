@@ -5,20 +5,27 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 
-export default function KitchenAddressScreen() {
+export default function KitchenInfoScreen() {
     const router = useRouter();
 
-    const [deliveryInstructions, setDeliveryInstructions] = useState("abc");
+    // State matching the screenshot ("Best Kitchen", etc.)
+    const [kitchenName, setKitchenName] = useState("Best Kitchen");
+    const [tagline, setTagline] = useState("Taste the Tradition, Feel the Love");
+    const [description, setDescription] = useState("Authentic Arbic cuisine prepared with love and traditional recipes passed down through generations. We specialize in North Indian dishes with a modern twist.");
+    const [confirmModalVisible, setConfirmModalVisible] = useState(false);
     const [submitModalVisible, setSubmitModalVisible] = useState(false);
 
-    // Read-only values from screenshot
-    const addressName = "Abc";
-    const fullAddress = "123 MG Road, Bangalore - 560001";
-    const city = "Sadia Ariba"; // This looks like a name selected in a city dropdown? Use as string for now.
-    const cityZone = "Abc";
-    const googleMapLink = "abc";
+    // Determines if fields are editable. In existing code this might toggle.
+    // Screenshot shows 'Edit' button top right, and inputs look active.
+    const [isEditing, setIsEditing] = useState(true);
 
-    const handleConfirm = () => {
+    const handleConfirmPress = () => {
+        setConfirmModalVisible(true);
+    };
+
+    const handleSave = () => {
+        setConfirmModalVisible(false);
+        // Show success/submit modal
         setSubmitModalVisible(true);
     };
 
@@ -34,79 +41,98 @@ export default function KitchenAddressScreen() {
                 <Pressable onPress={() => router.back()} style={styles.backBtn}>
                     <Ionicons name="chevron-back" size={28} color="#600E10" />
                 </Pressable>
-                <Text style={styles.headerTitle}>Kitchen Address</Text>
-                <View style={{ width: 28 }} />
+                <Text style={styles.headerTitle}>Kitchen Information</Text>
+                <Pressable onPress={() => setIsEditing(!isEditing)} style={styles.editBtn}>
+                    <Text style={styles.editText}>Edit</Text>
+                    <Ionicons name="create-outline" size={16} color="#600E10" />
+                </Pressable>
             </View>
 
             <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
-                {/* Disabled Fields */}
-                <View style={styles.formGroup}>
-                    <Text style={styles.label}>Address Name</Text>
-                    <View style={styles.disabledInput}>
-                        <Text style={styles.disabledText}>{addressName}</Text>
-                    </View>
-                </View>
+                {/* Warning Text */}
+                <Text style={styles.warningText}>
+                    If your kitchen is active, changes need admin approval. If it's in draft, changes update instantly.
+                </Text>
 
                 <View style={styles.formGroup}>
-                    <Text style={styles.label}>Full Address</Text>
-                    <View style={styles.disabledInput}>
-                        <Text style={styles.disabledText}>{fullAddress}</Text>
-                    </View>
-                </View>
-
-                <View style={styles.formGroup}>
-                    <Text style={styles.label}>City</Text>
-                    <View style={styles.disabledInput}>
-                        <Text style={styles.disabledText}>{city}</Text>
-                        <Ionicons name="chevron-down" size={20} color="#999" style={{ position: 'absolute', right: 15, top: 15 }} />
-                    </View>
-                </View>
-
-                <View style={styles.formGroup}>
-                    <Text style={styles.label}>City Zone</Text>
-                    <View style={styles.disabledInput}>
-                        <Text style={styles.disabledText}>{cityZone}</Text>
-                        <Ionicons name="chevron-down" size={20} color="#999" style={{ position: 'absolute', right: 15, top: 15 }} />
-                    </View>
-                </View>
-
-                {/* Editable Field */}
-                <View style={styles.formGroup}>
-                    <Text style={styles.label}>Delivery Instructions & Nearest Landmark</Text>
+                    <Text style={styles.label}>Kitchen Name</Text>
                     <TextInput
                         style={styles.input}
-                        value={deliveryInstructions}
-                        onChangeText={setDeliveryInstructions}
+                        value={kitchenName}
+                        onChangeText={setKitchenName}
+                        placeholder="Enter kitchen name"
+                        editable={isEditing}
                     />
                 </View>
 
-                {/* Disabled Map Link */}
                 <View style={styles.formGroup}>
-                    <Text style={styles.label}>Google Map Location Link</Text>
-                    <View style={styles.disabledInput}>
-                        <Text style={styles.disabledText}>{googleMapLink}</Text>
+                    <Text style={styles.label}>Kitchen Tagline</Text>
+                    <TextInput
+                        style={styles.input}
+                        value={tagline}
+                        onChangeText={setTagline}
+                        placeholder="Tagline"
+                        editable={isEditing}
+                    />
+                </View>
+
+                <View style={styles.formGroup}>
+                    <Text style={styles.label}>Kitchen onboarding Date</Text>
+                    <View style={styles.disabledInputContainer}>
+                        <Text style={styles.disabledInputText}>January 15, 2024</Text>
                     </View>
                 </View>
 
-                {/* Live Map Preview */}
                 <View style={styles.formGroup}>
-                    <Text style={styles.label}>Live Map Preview</Text>
-                    <View style={styles.mapContainer}>
-                        <View style={styles.pinCircle}>
-                            <Ionicons name="location-outline" size={20} color="#000" />
-                        </View>
-                        <Text style={styles.mapHelperText}>Add Google Maps link to view location</Text>
-                    </View>
+                    <Text style={styles.label}>Kitchen Bio</Text>
+                    <TextInput
+                        style={[styles.input, styles.textArea]}
+                        value={description}
+                        onChangeText={setDescription}
+                        placeholder="Bio..."
+                        multiline
+                        textAlignVertical="top"
+                        editable={isEditing}
+                    />
                 </View>
 
-                <Pressable style={styles.saveBtn} onPress={handleConfirm}>
+                <Pressable style={styles.saveBtn} onPress={handleConfirmPress}>
                     <Text style={styles.saveText}>Confirm</Text>
                 </Pressable>
-
             </ScrollView>
 
-            {/* Submit Request Modal */}
+            {/* Confirm Changes Modal */}
+            <Modal
+                animationType="fade"
+                transparent={true}
+                visible={confirmModalVisible}
+                onRequestClose={() => setConfirmModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.confirmModalContent}>
+                        <Pressable onPress={() => setConfirmModalVisible(false)} style={styles.closeIcon}>
+                            <Ionicons name="close" size={24} color="#333" />
+                        </Pressable>
+
+                        <Text style={styles.modalTitle}>Confirm Changes</Text>
+                        <Text style={styles.modalDesc}>
+                            Are you sure you want to save these changes?
+                        </Text>
+
+                        <View style={styles.modalActions}>
+                            <Pressable style={styles.modalCancelBtn} onPress={() => setConfirmModalVisible(false)}>
+                                <Text style={styles.modalCancelText}>No</Text>
+                            </Pressable>
+                            <Pressable style={styles.modalConfirmBtn} onPress={handleSave}>
+                                <Text style={styles.modalConfirmText}>Yes</Text>
+                            </Pressable>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Submit Success Modal ('Submit Request') */}
             <Modal
                 animationType="fade"
                 transparent={true}
@@ -150,7 +176,7 @@ export default function KitchenAddressScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F4F7FC',
+        backgroundColor: '#F4F7FC', // Matching the slight blue tint
     },
     header: {
         flexDirection: 'row',
@@ -164,20 +190,43 @@ const styles = StyleSheet.create({
         padding: 4,
     },
     headerTitle: {
-        fontSize: 20,
+        fontSize: 20, // Slightly bigger, bolder
         fontFamily: 'Poppins_700Bold',
         color: '#600E10',
     },
+    editBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#E8906C',
+        borderRadius: 20,
+        paddingHorizontal: 12,
+        paddingVertical: 5,
+        gap: 5,
+    },
+    editText: {
+        fontSize: 14,
+        fontFamily: 'Poppins_500Medium',
+        color: '#1A1A1A',
+    },
     content: {
         padding: 24,
+    },
+    warningText: {
+        fontSize: 13,
+        fontFamily: 'Poppins_500Medium',
+        color: '#1A1A1A',
+        lineHeight: 20,
+        marginBottom: 25,
+        opacity: 0.8,
     },
     formGroup: {
         marginBottom: 20,
     },
     label: {
-        fontSize: 15,
-        fontFamily: 'Poppins_600SemiBold',
-        color: '#1A1A1A',
+        fontSize: 15, // Slightly bigger
+        fontFamily: 'Poppins_600SemiBold', // Bolder label
+        color: '#1A1A1A', // Dark
         marginBottom: 8,
     },
     input: {
@@ -195,44 +244,21 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.05,
         shadowRadius: 2,
     },
-    disabledInput: {
-        backgroundColor: '#D1D5DB', // Grey background
+    disabledInputContainer: {
+        backgroundColor: '#D1D5DB', // Grey background as per screenshot
         borderRadius: 12,
         padding: 16,
         borderWidth: 1,
         borderColor: '#E0E0E0',
-        justifyContent: 'center',
-        minHeight: 56,
     },
-    disabledText: {
-        color: '#6B7280', // Grey text
-        fontFamily: 'Poppins_400Regular',
+    disabledInputText: {
         fontSize: 15,
-    },
-    mapContainer: {
-        height: 150,
-        backgroundColor: '#D1D5DB',
-        borderRadius: 12,
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#E0E0E0',
-    },
-    pinCircle: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: 'rgba(0,0,0,0.05)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    mapHelperText: {
-        fontSize: 12,
-        color: '#555',
         fontFamily: 'Poppins_400Regular',
-        textAlign: 'center',
-        maxWidth: 200,
+        color: '#6B7280', // Grey text
+    },
+    textArea: {
+        minHeight: 120,
+        paddingTop: 15,
     },
     saveBtn: {
         backgroundColor: '#4E0D0F', // Dark Red
@@ -256,7 +282,7 @@ const styles = StyleSheet.create({
     // Modal Styles
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.6)',
+        backgroundColor: 'rgba(0,0,0,0.6)', // Darker overlay
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -273,16 +299,6 @@ const styles = StyleSheet.create({
         top: 20,
         right: 20,
         zIndex: 1,
-    },
-    hourglassIcon: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        borderWidth: 1,
-        borderColor: '#E0E0E0',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 15,
     },
     modalTitle: {
         fontSize: 20,
@@ -311,7 +327,7 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
         borderRadius: 30,
         borderWidth: 1,
-        borderColor: '#E8906C',
+        borderColor: '#E8906C', // Orange tint border
         alignItems: 'center',
     },
     modalCancelText: {
@@ -330,5 +346,15 @@ const styles = StyleSheet.create({
         color: '#FFF',
         fontFamily: 'Poppins_600SemiBold',
         fontSize: 16,
+    },
+    hourglassIcon: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 15,
     },
 });

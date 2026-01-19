@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { StyleSheet, View, TextInput, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView, Keyboard } from 'react-native';
+import { StyleSheet, View, TextInput, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView, Keyboard, Alert, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
@@ -12,8 +12,18 @@ export default function RegisterScreen() {
     const handleSendVerification = () => {
         Keyboard.dismiss();
         if (!phone) return alert('Please enter your mobile number');
-        // Logic to send OTP would go here. For now, navigate to verify screen.
-        router.push({ pathname: '/(auth)/verify', params: { phone } });
+
+        // Generate a random 4-digit OTP
+        const generatedOtp = Math.floor(1000 + Math.random() * 9000).toString();
+
+        // Simulate sending OTP
+        Alert.alert('OTP Sent', `Your verification code is ${generatedOtp}`);
+
+        // Navigate to verify screen
+        router.push({ 
+            pathname: '/(auth)/verify', 
+            params: { phone, actualOtp: generatedOtp } 
+        });
     };
 
     return (
@@ -22,7 +32,7 @@ export default function RegisterScreen() {
             style={styles.container}
         >
             <StatusBar style="dark" />
-            <ScrollView contentContainerStyle={styles.scrollContent}>
+            <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
                 {/* Header with Phone Icon and Step */}
                 <View style={styles.header}>
                     <Text style={styles.stepText}>1/6</Text>
@@ -56,14 +66,24 @@ export default function RegisterScreen() {
                 {/* Mobile Input */}
                 <View style={styles.inputSection}>
                     <Text style={styles.label}>Kitchen Owner Mobile Number</Text>
-                    <TextInput
-                        style={styles.input}
-                        placeholder="0333"
-                        value={phone}
-                        onChangeText={setPhone}
-                        keyboardType="phone-pad"
-                        placeholderTextColor="#999"
-                    />
+                    <View style={styles.phoneInputContainer}>
+                        <View style={styles.countryCodeContainer}>
+                            <Image
+                                source={{ uri: 'https://flagcdn.com/w40/pk.png' }}
+                                style={{ width: 24, height: 16, marginRight: 8 }}
+                            />
+                            <Text style={styles.countryCodeText}>+92</Text>
+                        </View>
+                        <TextInput
+                            style={styles.phoneInput}
+                            placeholder="300 1234567"
+                            value={phone}
+                            onChangeText={setPhone}
+                            keyboardType="phone-pad"
+                            placeholderTextColor="#999"
+                            maxLength={10}
+                        />
+                    </View>
                 </View>
 
                 {/* Footer Buttons */}
@@ -182,6 +202,38 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#E0E0E0',
     },
+    phoneInputContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
+        paddingHorizontal: 16,
+        paddingVertical: 4, // Adjust for inner text input height
+    },
+    countryCodeContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderRightWidth: 1,
+        borderRightColor: '#E0E0E0',
+        paddingRight: 12,
+        marginRight: 12,
+        height: '100%',
+        paddingVertical: 12,
+    },
+    countryCodeText: {
+        fontSize: 16,
+        fontFamily: 'Poppins_600SemiBold',
+        color: '#1A1A1A',
+    },
+    phoneInput: {
+        flex: 1,
+        fontSize: 16,
+        fontFamily: 'Poppins_400Regular',
+        color: '#1A1A1A',
+        height: 50,
+    },
     footer: {
         flexDirection: 'row',
         gap: 15,
@@ -189,7 +241,7 @@ const styles = StyleSheet.create({
     },
     backButton: {
         flex: 1,
-        paddingVertical: 14,
+        paddingVertical: 16,
         borderRadius: 30,
         borderWidth: 1,
         borderColor: '#E0E0E0',
@@ -202,8 +254,8 @@ const styles = StyleSheet.create({
         color: '#1A1A1A',
     },
     nextButton: {
-        flex: 1.5,
-        paddingVertical: 14,
+        flex: 1,
+        paddingVertical: 16,
         borderRadius: 30,
         backgroundColor: '#600E10',
         alignItems: 'center',
