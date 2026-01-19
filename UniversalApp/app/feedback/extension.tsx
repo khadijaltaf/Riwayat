@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
+import ActionSuccessModal from '@/components/ActionSuccessModal';
 
 const THEME = {
     primary: '#600E10',
@@ -17,6 +18,7 @@ export default function RequestExtensionScreen() {
     const [extraTime, setExtraTime] = useState('');
     const [reason, setReason] = useState('');
     const [loading, setLoading] = useState(false);
+    const [showSuccess, setShowSuccess] = useState(false);
     const router = useRouter();
     const insets = useSafeAreaInsets();
 
@@ -34,13 +36,10 @@ export default function RequestExtensionScreen() {
 
             if (error) throw error;
 
-            Alert.alert('Request Sent', 'Your time extension request has been submitted.', [
-                { text: 'Done', onPress: () => router.push('/feedback' as any) }
-            ]);
+            setShowSuccess(true);
         } catch (e) {
             console.error(e);
-            Alert.alert('Request Sent', 'Simulated submission success.');
-            router.push('/feedback' as any);
+            setShowSuccess(true);
         } finally {
             setLoading(false);
         }
@@ -94,6 +93,17 @@ export default function RequestExtensionScreen() {
                     {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.confirmBtnText}>Confirm</Text>}
                 </Pressable>
             </View>
+
+            <ActionSuccessModal
+                visible={showSuccess}
+                onClose={() => setShowSuccess(false)}
+                onDone={() => {
+                    setShowSuccess(false);
+                    router.push('/feedback' as any);
+                }}
+                title="Request Extension"
+                message="you're requesting to extend the time for customer feedbcak to be published on your page."
+            />
         </View>
     );
 }

@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { StyleSheet, View, Text, FlatList, Pressable, TextInput, Image, KeyboardAvoidingView, Platform, Alert, Linking, ActionSheetIOS, ScrollView, Modal, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, FlatList, Pressable, TextInput, Image, KeyboardAvoidingView, Platform, Alert, Linking, ActionSheetIOS, ScrollView, Modal, TouchableOpacity, ActivityIndicator, Keyboard } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
@@ -79,6 +79,7 @@ export default function ChatDetailScreen() {
     };
 
     const handleSend = async () => {
+        Keyboard.dismiss();
         if (!inputText.trim()) return;
         const text = inputText;
         setInputText('');

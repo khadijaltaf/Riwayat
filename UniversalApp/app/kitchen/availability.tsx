@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, Switch, Pressable, ScrollView, Modal, TextInput } from 'react-native';
+import { StyleSheet, View, Text, Switch, Pressable, ScrollView, Modal, TextInput, Keyboard } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
@@ -77,6 +77,7 @@ export default function AvailabilityScreen() {
     };
 
     const confirmCloseKitchen = () => {
+        Keyboard.dismiss();
         if (selectedSlot) {
             toggleSlot(selectedSlot.dayIndex, selectedSlot.slotIndex);
         }
@@ -89,6 +90,7 @@ export default function AvailabilityScreen() {
     };
 
     const handleSubmitRequest = () => {
+        Keyboard.dismiss();
         setSubmitModalVisible(true);
     };
 

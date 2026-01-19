@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
+import ActionSuccessModal from '@/components/ActionSuccessModal';
 
 const THEME = {
     primary: '#600E10',
@@ -17,7 +18,9 @@ export default function CompensationScreen() {
     const [type, setType] = useState('');
     const [amount, setAmount] = useState('');
     const [reason, setReason] = useState('');
+    const [note, setNote] = useState('');
     const [loading, setLoading] = useState(false);
+    const [showSuccess, setShowSuccess] = useState(false);
     const router = useRouter();
     const insets = useSafeAreaInsets();
 
@@ -31,18 +34,16 @@ export default function CompensationScreen() {
                 feedback_id: id,
                 type,
                 amount: parseFloat(amount),
-                reason
+                reason,
+                admin_note: note
             }]);
 
             if (error) throw error;
 
-            Alert.alert('Request Sent', 'Your compensation offer has been submitted.', [
-                { text: 'Done', onPress: () => router.push('/feedback' as any) }
-            ]);
+            setShowSuccess(true);
         } catch (e) {
             console.error(e);
-            Alert.alert('Request Sent', 'Simulated submission success.');
-            router.push('/feedback' as any);
+            setShowSuccess(true);
         } finally {
             setLoading(false);
         }
@@ -76,10 +77,10 @@ export default function CompensationScreen() {
                 </View>
 
                 <View style={styles.field}>
-                    <Text style={styles.label}>Amount (PKR)</Text>
+                    <Text style={styles.label}>Amount</Text>
                     <TextInput
                         style={styles.input}
-                        placeholder="Enter Amount"
+                        placeholder="Type Here"
                         value={amount}
                         onChangeText={setAmount}
                         keyboardType="numeric"
@@ -87,12 +88,12 @@ export default function CompensationScreen() {
                 </View>
 
                 <View style={styles.field}>
-                    <Text style={styles.label}>Reason</Text>
+                    <Text style={styles.label}>Note for Admin (Optional)</Text>
                     <TextInput
                         style={styles.textArea}
-                        placeholder="Specify reason for compensation"
-                        value={reason}
-                        onChangeText={setReason}
+                        placeholder="Type Here"
+                        value={note}
+                        onChangeText={setNote}
                         multiline
                     />
                 </View>
@@ -105,6 +106,19 @@ export default function CompensationScreen() {
                     {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.confirmBtnText}>Confirm</Text>}
                 </Pressable>
             </View>
+
+            <ActionSuccessModal
+                visible={showSuccess}
+                onClose={() => setShowSuccess(false)}
+                onDone={() => {
+                    setShowSuccess(false);
+                    router.push('/feedback' as any);
+                }}
+                title="Submit Request"
+                message="Compensation request generated. Admin will process and notify you."
+                idLabel="Compensation Request Number"
+                idValue="COMP271161"
+            />
         </View>
     );
 }

@@ -141,7 +141,16 @@ export default function FeedbackDetailScreen() {
                     <View style={styles.divider} />
 
                     <View style={styles.replySection}>
-                        <Text style={styles.sectionTitle}>Your Public Reply</Text>
+                        <View style={styles.replyHeader}>
+                            <Text style={styles.sectionTitle}>Your Public Reply</Text>
+                            <View style={styles.toggleRow}>
+                                <Text style={styles.toggleLabel}>Show customer name</Text>
+                                <Pressable style={styles.toggleInner}>
+                                    <View style={styles.toggleCircle} />
+                                </Pressable>
+                            </View>
+                        </View>
+
                         <TextInput
                             style={styles.replyInput}
                             placeholder="Type here"
@@ -149,6 +158,7 @@ export default function FeedbackDetailScreen() {
                             onChangeText={setReplyText}
                             multiline
                             numberOfLines={4}
+                            placeholderTextColor="#AAA"
                         />
 
                         <Pressable style={styles.publishBtn} onPress={handlePublish}>
@@ -156,21 +166,30 @@ export default function FeedbackDetailScreen() {
                         </Pressable>
                     </View>
                 </View>
+
+                <View style={styles.actionBtns}>
+                    <Pressable style={styles.extBtn} onPress={() => router.push({ pathname: '/feedback/extension' as any, params: { id } })}>
+                        <Text style={styles.extBtnText}>Request Extension</Text>
+                    </Pressable>
+                    <Pressable style={styles.dispBtn} onPress={() => router.push({ pathname: '/feedback/dispute' as any, params: { id } })}>
+                        <Text style={styles.dispBtnText}>Raise Dispute</Text>
+                    </Pressable>
+                </View>
             </ScrollView>
 
             {/* More menu Modal */}
             <Modal transparent visible={isMenuVisible} animationType="fade" onRequestClose={() => setIsMenuVisible(false)}>
                 <Pressable style={styles.modalOverlay} onPress={() => setIsMenuVisible(false)}>
                     <View style={[styles.menuContainer, { top: insets.top + 60 }]}>
-                        <Pressable style={styles.menuItem} onPress={() => { setIsMenuVisible(false); router.push({ pathname: '/feedback/compensation', params: { id } }); }}>
+                        <Pressable style={styles.menuItem} onPress={() => { setIsMenuVisible(false); router.push({ pathname: '/feedback/compensation' as any, params: { id } }); }}>
                             <Text style={styles.menuItemText}>Compensate</Text>
                         </Pressable>
                         <View style={styles.menuDivider} />
-                        <Pressable style={styles.menuItem} onPress={() => { setIsMenuVisible(false); router.push({ pathname: '/feedback/dispute', params: { id } }); }}>
+                        <Pressable style={styles.menuItem} onPress={() => { setIsMenuVisible(false); router.push({ pathname: '/feedback/dispute' as any, params: { id } }); }}>
                             <Text style={styles.menuItemText}>Raise Dispute</Text>
                         </Pressable>
                         <View style={styles.menuDivider} />
-                        <Pressable style={styles.menuItem} onPress={() => { setIsMenuVisible(false); router.push({ pathname: '/feedback/extension', params: { id } }); }}>
+                        <Pressable style={styles.menuItem} onPress={() => { setIsMenuVisible(false); router.push({ pathname: '/feedback/extension' as any, params: { id } }); }}>
                             <Text style={styles.menuItemText}>Request Extra Time</Text>
                         </Pressable>
                     </View>
@@ -299,6 +318,35 @@ const styles = StyleSheet.create({
     replySection: {
         gap: 15,
     },
+    replyHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 5,
+    },
+    toggleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    toggleLabel: {
+        fontSize: 12,
+        fontFamily: 'Poppins_400Regular',
+        color: '#666',
+    },
+    toggleInner: {
+        width: 34,
+        height: 18,
+        borderRadius: 10,
+        backgroundColor: '#E0E0E0',
+        padding: 2,
+    },
+    toggleCircle: {
+        width: 14,
+        height: 14,
+        borderRadius: 7,
+        backgroundColor: '#FFF',
+    },
     replyInput: {
         backgroundColor: '#F9F9F9',
         borderRadius: 15,
@@ -322,6 +370,40 @@ const styles = StyleSheet.create({
         color: '#FFF',
         fontSize: 16,
         fontFamily: 'Poppins_700Bold',
+    },
+    actionBtns: {
+        flexDirection: 'row',
+        gap: 15,
+        marginTop: 20,
+        marginBottom: 20,
+    },
+    extBtn: {
+        flex: 1,
+        height: 50,
+        borderRadius: 25,
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#FFF',
+    },
+    extBtnText: {
+        fontSize: 14,
+        fontFamily: 'Poppins_600SemiBold',
+        color: '#1A1A1A',
+    },
+    dispBtn: {
+        flex: 1,
+        height: 50,
+        borderRadius: 25,
+        backgroundColor: '#600E10',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    dispBtnText: {
+        fontSize: 14,
+        fontFamily: 'Poppins_600SemiBold',
+        color: '#FFF',
     },
     modalOverlay: {
         flex: 1,

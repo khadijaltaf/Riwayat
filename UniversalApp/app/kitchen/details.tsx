@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, TextInput, Pressable, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
+import { StyleSheet, View, Text, TextInput, Pressable, KeyboardAvoidingView, Platform, ScrollView, Alert, Keyboard } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
@@ -14,6 +14,7 @@ export default function KitchenDetailsScreen() {
     const router = useRouter();
 
     const handleConfirm = () => {
+        Keyboard.dismiss();
         if (!name) return Alert.alert('Error', 'Kitchen name is required');
         setShowModal(true);
     };
