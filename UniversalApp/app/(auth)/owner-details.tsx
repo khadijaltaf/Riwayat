@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { StyleSheet, View, TextInput, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView, Alert, Keyboard } from 'react-native';
+import { StyleSheet, View, TextInput, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView, Alert, Keyboard, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
@@ -15,6 +15,7 @@ export default function OwnerDetailsScreen() {
     const [isAgent, setIsAgent] = useState(false);
     const [relationship, setRelationship] = useState('');
     const [showSelection, setShowSelection] = useState(false);
+    const [loading, setLoading] = useState(false);
     const router = useRouter();
 
     const relationships = ['Family Member', 'Employee', 'Partner', 'Friend', 'Other'];
@@ -29,23 +30,26 @@ export default function OwnerDetailsScreen() {
         if (isAgent && !relationship) return Alert.alert('Error', 'Please select your relationship');
 
         // Final save to Supabase
+        setLoading(true);
         try {
             const { error } = await supabase.from('onboarding_sessions').update({
-                owner_name: name,
+                full_name: name,
                 owner_email: email,
                 is_agent: isAgent,
                 relationship: isAgent ? relationship : null,
-                registration_complete: true,
+                step: 'kitchen_details',
                 updated_at: new Date()
             }).eq('phone', phone);
             if (error) console.warn('Supabase save error:', error);
         } catch (e) {
             console.error(e);
+        } finally {
+            setLoading(false);
         }
 
         // Navigate to Dashboard (Root Tabs)
         // Navigate to Kitchen Details
-        router.push('/(auth)/kitchen-details');
+        router.push({ pathname: '/(auth)/kitchen-details', params: { phone } });
     };
 
     return (
@@ -130,11 +134,15 @@ export default function OwnerDetailsScreen() {
                         <Text style={styles.backButtonText}>Back</Text>
                     </Pressable>
                     <Pressable
-                        style={[styles.nextButton, !name && styles.disabledButton]}
+                        style={[styles.nextButton, (!name || loading) && styles.disabledButton]}
                         onPress={handleContinue}
-                        disabled={!name}
+                        disabled={!name || loading}
                     >
-                        <Text style={styles.nextButtonText}>Continue</Text>
+                        {loading ? (
+                            <ActivityIndicator color="#FFFFFF" size="small" />
+                        ) : (
+                            <Text style={styles.nextButtonText}>Continue</Text>
+                        )}
                     </Pressable>
                 </View>
 

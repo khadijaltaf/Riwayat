@@ -4,6 +4,8 @@ import { StyleSheet, View, Text, FlatList, Pressable, Image, TextInput, SafeArea
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
+import { supabase } from '@/lib/supabase';
+import { chatService } from '@/lib/chat-service';
 
 // Mock Data matching screenshot
 const MOCK_CHATS = [
@@ -55,19 +57,61 @@ const MOCK_CHATS = [
 
 export default function ChatListScreen() {
     const router = useRouter();
+    const [chats, setChats] = React.useState<any[]>([]);
+    const [loading, setLoading] = React.useState(true);
 
-    const renderItem = ({ item }: { item: typeof MOCK_CHATS[0] }) => (
+    React.useEffect(() => {
+        fetchChats();
+    }, []);
+
+    const fetchChats = async () => {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return; // Handle auth redirect if needed
+
+            // We need the user's phone to find conversations
+            // Assuming phone is stored in metadata or we can get it from profile
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('phone')
+                .eq('id', user.id)
+                .single();
+
+            if (profile?.phone) {
+                const data = await chatService.getConversations(profile.phone);
+                // Map to UI format
+                // In a real app we'd fetch the OTHER participant's name/avatar here too
+                // For now, we'll format what we have
+                const formatted = data.map((c: any) => {
+                    const otherPhone = c.participant_1 === profile.phone ? c.participant_2 : c.participant_1;
+                    return {
+                        id: c.id,
+                        name: otherPhone || 'Unknown User', // Ideally fetch name from profiles table using otherPhone
+                        message: c.last_message || 'Start a conversation',
+                        time: new Date(c.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                        unread: 0, // Need read status logic in DB
+                        avatarColor: '#FFE0B2',
+                        avatarTextColor: '#E65100',
+                        otherPhone: otherPhone
+                    };
+                });
+                setChats(formatted);
+            }
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const renderItem = ({ item }: { item: any }) => (
         <Pressable
             style={styles.chatCard}
-            onPress={() => router.push({ pathname: '/chat/[id]', params: { id: item.id, name: item.name } })}
+            onPress={() => router.push({ pathname: '/chat/[id]', params: { id: item.id, name: item.name, userPhone: item.otherPhone } })}
         >
             {/* Avatar */}
             <View style={[styles.avatar, { backgroundColor: item.avatarColor }]}>
-                {item.name === 'Riwayat Support' ? (
-                    <Ionicons name="chatbubble-outline" size={24} color={item.avatarTextColor} />
-                ) : (
-                    <Ionicons name="person-outline" size={24} color={item.avatarTextColor} />
-                )}
+                <Ionicons name="person-outline" size={24} color={item.avatarTextColor} />
             </View>
 
             {/* Content */}
@@ -78,15 +122,7 @@ export default function ChatListScreen() {
                 </View>
 
                 <Text style={styles.message} numberOfLines={1}>{item.message}</Text>
-                {item.subMessage ? <Text style={styles.subMessage}>{item.subMessage}</Text> : null}
             </View>
-
-            {/* Unread Badge (Absolute positioned or flex) */}
-            {item.unread > 0 && (
-                <View style={styles.badge}>
-                    <Text style={styles.badgeText}>{item.unread}</Text>
-                </View>
-            )}
         </Pressable>
     );
 
@@ -105,11 +141,16 @@ export default function ChatListScreen() {
 
                 {/* List */}
                 <FlatList
-                    data={MOCK_CHATS}
+                    data={chats}
                     keyExtractor={(item) => item.id}
                     renderItem={renderItem}
                     contentContainerStyle={styles.listContent}
                     showsVerticalScrollIndicator={false}
+                    refreshing={loading}
+                    onRefresh={fetchChats}
+                    ListEmptyComponent={
+                        !loading ? <Text style={{ textAlign: 'center', marginTop: 20, color: '#999' }}>No conversations yet</Text> : null
+                    }
                 />
             </View>
         </SafeAreaView>

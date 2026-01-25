@@ -1,33 +1,66 @@
 
 import React, { useState } from 'react';
-import { StyleSheet, View, TextInput, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView, Alert, Keyboard } from 'react-native';
+import { StyleSheet, View, TextInput, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView, Alert, Keyboard, Image, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { supabase } from '@/lib/supabase';
+import * as ImagePicker from 'expo-image-picker';
+import { storageService } from '@/services/storage-service';
 
 export default function KitchenDetailsScreen() {
     const [kitchenName, setKitchenName] = useState('');
     const [tagline, setTagline] = useState('');
+    const [bannerImage, setBannerImage] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
     const { phone } = useLocalSearchParams<{ phone: string }>();
     const [showTaglineInfo, setShowTaglineInfo] = useState(false);
     const router = useRouter();
+
+    const pickImage = async () => {
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [16, 9],
+            quality: 0.8,
+        });
+
+        if (!result.canceled) {
+            setBannerImage(result.assets[0].uri);
+        }
+    };
 
     const handleContinue = async () => {
         Keyboard.dismiss();
         if (!kitchenName) return Alert.alert('Error', 'Please enter your kitchen name');
 
         // Save to Supabase
+        setLoading(true);
         try {
+            let bannerUrl = '';
+            if (bannerImage && bannerImage.startsWith('file://')) {
+                const { publicUrl, error: uploadError } = await storageService.uploadImage(bannerImage, 'kitchen-media');
+                if (uploadError) {
+                    console.warn('Banner upload error (continuing):', uploadError);
+                } else {
+                    bannerUrl = publicUrl || '';
+                }
+            }
+
             const { error } = await supabase.from('onboarding_sessions').update({
                 kitchen_name: kitchenName,
                 kitchen_tagline: tagline,
+                kitchen_description: tagline,
+                kitchen_banner_url: bannerUrl || null,
+                step: 'location',
                 updated_at: new Date()
             }).eq('phone', phone);
 
             if (error) console.warn('Supabase save error:', error);
         } catch (e) {
             console.error(e);
+        } finally {
+            setLoading(false);
         }
 
         // Navigate to Screen 11: Kitchen Location
@@ -100,6 +133,20 @@ export default function KitchenDetailsScreen() {
                             placeholderTextColor="#999"
                         />
                     </View>
+
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Kitchen Banner Image</Text>
+                        <Pressable style={styles.uploadBox} onPress={pickImage}>
+                            {bannerImage ? (
+                                <Image source={{ uri: bannerImage }} style={styles.uploadedImage} />
+                            ) : (
+                                <>
+                                    <Ionicons name="image-outline" size={32} color="#600E10" />
+                                    <Text style={styles.uploadText}>Upload banner photo</Text>
+                                </>
+                            )}
+                        </Pressable>
+                    </View>
                 </View>
 
                 {/* Footer Buttons */}
@@ -108,11 +155,15 @@ export default function KitchenDetailsScreen() {
                         <Text style={styles.backButtonText}>Back</Text>
                     </Pressable>
                     <Pressable
-                        style={[styles.nextButton, !kitchenName && styles.disabledButton]}
+                        style={[styles.nextButton, (!kitchenName || loading) && styles.disabledButton]}
                         onPress={handleContinue}
-                        disabled={!kitchenName}
+                        disabled={!kitchenName || loading}
                     >
-                        <Text style={styles.nextButtonText}>Continue</Text>
+                        {loading ? (
+                            <ActivityIndicator color="#FFFFFF" size="small" />
+                        ) : (
+                            <Text style={styles.nextButtonText}>Continue</Text>
+                        )}
                     </Pressable>
                 </View>
             </ScrollView>
@@ -266,5 +317,27 @@ const styles = StyleSheet.create({
     },
     disabledButton: {
         opacity: 0.5,
+    },
+    uploadBox: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        height: 150,
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
+        borderStyle: 'dashed',
+        justifyContent: 'center',
+        alignItems: 'center',
+        overflow: 'hidden',
+    },
+    uploadedImage: {
+        width: '100%',
+        height: '100%',
+        resizeMode: 'cover',
+    },
+    uploadText: {
+        fontSize: 14,
+        fontFamily: 'Poppins_400Regular',
+        color: '#666',
+        marginTop: 8,
     },
 });

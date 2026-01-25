@@ -7,6 +7,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 
+import { authMock } from '@/services/auth-mock';
+
 const { width } = Dimensions.get('window');
 
 // Dynamic card width based on screen size (2 columns)
@@ -16,23 +18,48 @@ export default function DashboardScreen() {
   const [isOnline, setIsOnline] = useState(true);
   const [ownerName, setOwnerName] = useState('Partner');
   const [kitchenName, setKitchenName] = useState('My Kitchen');
+  const [avatarUrl, setAvatarUrl] = useState('https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100');
+  const [totalSales, setTotalSales] = useState('0');
+  const [totalOrders, setTotalOrders] = useState('0');
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
 
   const fetchProfile = async () => {
     try {
-      // For demo purposes, we might fetch the last updated session or a logged in user
-      // Since we don't have a full auth context provider in this snippet, we'll try to fetch the latest onboarding session
-      const { data, error } = await supabase
-        .from('onboarding_sessions')
-        .select('owner_name, kitchen_name')
-        .order('updated_at', { ascending: false })
-        .limit(1)
-        .single();
+      const { data: { user } } = await supabase.auth.getUser();
 
-      if (data) {
-        if (data.owner_name) setOwnerName(data.owner_name);
-        // Kitchen name might be in a different table or field, assuming mocked for now if not in session
+      if (user) {
+        // Fetch Profile
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('owner_name, avatar_url')
+          .eq('id', user.id)
+          .single();
+
+        if (profile?.owner_name) {
+          setOwnerName(profile.owner_name);
+        } else {
+          setOwnerName('Partner');
+        }
+        if (profile?.avatar_url) setAvatarUrl(profile.avatar_url);
+
+        // Fetch Kitchen
+        const { data: kitchen } = await supabase
+          .from('kitchens')
+          .select('name, is_online, total_sales, total_orders')
+          .eq('owner_id', user.id)
+          .single();
+
+        if (kitchen) {
+          setKitchenName(kitchen.name);
+          setIsOnline(kitchen.is_online || false);
+          setTotalSales(kitchen.total_sales?.toString() || '0');
+          setTotalOrders(kitchen.total_orders?.toString() || '0');
+        }
+      } else {
+        // Fallback or redirect to login? 
+        // For now, let's keep default or maybe redirect
+        // router.replace('/(auth)/login-otp');
       }
     } catch (e) {
       console.log('Error fetching profile', e);
@@ -73,7 +100,7 @@ export default function DashboardScreen() {
       <View style={styles.header}>
         <View style={styles.headerTitleRow}>
           <Image
-            source={{ uri: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100' }}
+            source={{ uri: avatarUrl }}
             style={styles.profileImage}
           />
           <View style={styles.headerTextContainer}>
@@ -115,14 +142,14 @@ export default function DashboardScreen() {
                 <Ionicons name="logo-usd" size={16} color="#FFFFFF" />
               </View>
               <Text style={styles.statLabel}>Total Sales</Text>
-              <Text style={styles.statValue}>$842</Text>
+              <Text style={styles.statValue}>${totalSales}</Text>
             </View>
             <View style={styles.statCard}>
               <View style={styles.statIconBadge}>
                 <Ionicons name="cube-outline" size={16} color="#FFFFFF" />
               </View>
               <Text style={styles.statLabel}>Today</Text>
-              <Text style={styles.statValue}>24 orders</Text>
+              <Text style={styles.statValue}>{totalOrders} orders</Text>
             </View>
           </View>
         </LinearGradient>

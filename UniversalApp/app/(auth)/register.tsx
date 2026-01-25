@@ -1,29 +1,62 @@
-
 import React, { useState } from 'react';
-import { StyleSheet, View, TextInput, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView, Keyboard, Alert, Image } from 'react-native';
+import { StyleSheet, View, TextInput, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView, Keyboard, Alert, Image, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
+import { supabase } from '@/lib/supabase';
 
 export default function RegisterScreen() {
     const [phone, setPhone] = useState('');
+    const [loading, setLoading] = useState(false);
     const router = useRouter();
 
-    const handleSendVerification = () => {
+    const handleSendVerification = async () => {
         Keyboard.dismiss();
         if (!phone) return alert('Please enter your mobile number');
 
-        // Generate a random 4-digit OTP
+        setLoading(true);
+
+        // Simulate sending OTP locally to bypass SMS provider issues
         const generatedOtp = Math.floor(1000 + Math.random() * 9000).toString();
 
-        // Simulate sending OTP
-        Alert.alert('OTP Sent', `Your verification code is ${generatedOtp}`);
+        // Clean phone for consistency
+        const formattedPhone = phone.startsWith('0')
+            ? '+92' + phone.substring(1).replace(/\s/g, '')
+            : '+92' + phone.replace(/\s/g, '');
 
-        // Navigate to verify screen
-        router.push({ 
-            pathname: '/(auth)/verify', 
-            params: { phone, actualOtp: generatedOtp } 
-        });
+        // 1. Clean phone for storage consistency (keep 0 prefix if present or standardized)
+        const cleanPhone = phone.trim();
+
+        try {
+            // 2. Save OTP to Supabase Onboarding Session
+            const { error } = await supabase.from('onboarding_sessions').upsert({
+                phone: formattedPhone,
+                last_otp: generatedOtp,
+                step: 'verify',
+                updated_at: new Date()
+            }, { onConflict: 'phone' });
+
+            if (error) throw error;
+
+            // Show the code and navigate
+            Alert.alert('Verification Code', `Your OTP is: ${generatedOtp}`, [
+                {
+                    text: 'OK',
+                    onPress: () => {
+                        router.push({
+                            pathname: '/(auth)/verify',
+                            params: { phone: formattedPhone, actualOtp: generatedOtp }
+                        });
+                    }
+                }
+            ]);
+
+        } catch (e: any) {
+            console.warn('Failed to save OTP to Supabase:', e);
+            Alert.alert('Error', 'Failed to initialize session. Please check your connection.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -92,11 +125,15 @@ export default function RegisterScreen() {
                         <Text style={styles.backButtonText}>Back</Text>
                     </Pressable>
                     <Pressable
-                        style={[styles.nextButton, !phone && styles.disabledButton]}
+                        style={[styles.nextButton, (!phone || loading) && styles.disabledButton]}
                         onPress={handleSendVerification}
-                        disabled={!phone}
+                        disabled={!phone || loading}
                     >
-                        <Text style={styles.nextButtonText}>Send verification</Text>
+                        {loading ? (
+                            <ActivityIndicator color="#FFFFFF" size="small" />
+                        ) : (
+                            <Text style={styles.nextButtonText}>Send</Text>
+                        )}
                     </Pressable>
                 </View>
             </ScrollView>

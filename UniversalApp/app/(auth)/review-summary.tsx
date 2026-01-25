@@ -4,6 +4,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { supabase } from '@/lib/supabase';
+import { authMock } from '@/services/auth-mock';
 
 export default function ReviewSummaryScreen() {
     const { phone } = useLocalSearchParams<{ phone: string }>();
@@ -36,16 +37,57 @@ export default function ReviewSummaryScreen() {
     const handleSend = async () => {
         Keyboard.dismiss();
         setSubmitting(true);
-        // Final Status Update
         try {
-            const { error } = await supabase.from('onboarding_sessions').update({
+            // Updated session status
+            await supabase.from('onboarding_sessions').update({
                 application_status: 'SUBMITTED',
                 updated_at: new Date()
             }).eq('phone', phone);
 
-            if (error) throw error;
-            // Navigate to final screen
-            router.push('/(auth)/onboarding-complete');
+            // Get current user (should be logged in from verify step)
+            const { data: { user } } = await supabase.auth.getUser();
+
+            if (!user) throw new Error('User not authenticated');
+
+            // Normalize phone number to match database format (+92...)
+            const rawPhone = phone || data?.phone || '';
+            const formattedPhone = rawPhone.startsWith('0')
+                ? '+92' + rawPhone.substring(1).replace(/\s/g, '')
+                : rawPhone.startsWith('+92')
+                    ? rawPhone.replace(/\s/g, '')
+                    : '+92' + rawPhone.replace(/\s/g, '');
+
+            const { error: profileError } = await supabase.from('profiles').upsert({
+                id: user.id,
+                phone: formattedPhone,
+                pin_hash: data?.temp_pin_hash || '0000',
+                owner_name: data?.full_name || 'Partner',
+                email: data?.owner_email || data?.email,
+                role: 'OWNER',
+                updated_at: new Date()
+            }, { onConflict: 'id' });
+
+            if (profileError) {
+                throw profileError;
+            }
+
+            // Upsert Kitchen
+            const { error: kitchenError } = await supabase.from('kitchens').upsert({
+                owner_id: user.id,
+                name: data?.kitchen_name || 'My Kitchen',
+                description: data?.kitchen_tagline,
+                banner_image_url: data?.kitchen_banner_url,
+                address: data?.address,
+                city: data?.city,
+                area: data?.area,
+                is_online: true,
+                updated_at: new Date()
+            }, { onConflict: 'owner_id' });
+
+            if (kitchenError) throw kitchenError;
+
+            // Navigate to final screen (replace history so they can't go back)
+            router.replace('/(auth)/onboarding-complete');
         } catch (e: any) {
             console.error(e);
             Alert.alert('Error', e.message || 'Submission failed');
@@ -93,6 +135,7 @@ export default function ReviewSummaryScreen() {
                     <SummaryCard
                         title="Kitchen Details"
                         details={`${data?.kitchen_name || 'Not provided'}${data?.kitchen_tagline ? '\n' + data.kitchen_tagline : ''}`}
+                        imageUri={data?.kitchen_banner_url} // Show banner image if exists
                         onEdit={() => router.push({ pathname: '/(auth)/kitchen-details', params: { phone } })}
                     />
                     <SummaryCard

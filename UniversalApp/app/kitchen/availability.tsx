@@ -1,9 +1,9 @@
-
-import React, { useState } from 'react';
-import { StyleSheet, View, Text, Switch, Pressable, ScrollView, Modal, TextInput, Keyboard } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet as RNStyleSheet, View, Text, Switch, Pressable, ScrollView, Modal, TextInput, Keyboard, ActivityIndicator, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
+import { supabase } from '@/lib/supabase';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -21,29 +21,72 @@ interface TimeSlot {
 interface DaySchedule {
     day: string;
     slots: TimeSlot[];
-    isOpen: boolean; // Is the accordion open?
+    isOpen: boolean;
 }
+
+const DEFAULT_SCHEDULE: DaySchedule[] = DAYS.map(day => ({
+    day,
+    isOpen: day === 'Monday',
+    slots: [
+        { type: 'Breakfast', startTime: '6:00', endTime: '7:00', isActive: false, status: 'Inactive' },
+        { type: 'Lunch', startTime: '6:00', endTime: '7:00', isActive: true, status: 'Active' },
+        { type: 'Dinner', startTime: '6:00', endTime: '7:00', isActive: false, status: 'Pending' },
+    ]
+}));
 
 export default function AvailabilityScreen() {
     const router = useRouter();
-
-    // Mock Data mimicking the screenshot structure
-    const [schedule, setSchedule] = useState<DaySchedule[]>(DAYS.map(day => ({
-        day,
-        isOpen: day === 'Monday', // Open Monday by default
-        slots: [
-            { type: 'Breakfast', startTime: '6:00', endTime: '7:00', isActive: false, status: 'Inactive' },
-            { type: 'Lunch', startTime: '6:00', endTime: '7:00', isActive: true, status: 'Active' },
-            { type: 'Dinner', startTime: '6:00', endTime: '7:00', isActive: false, status: 'Pending' },
-        ]
-    })));
-
+    const [schedule, setSchedule] = useState<DaySchedule[]>(DEFAULT_SCHEDULE);
+    const [loading, setLoading] = useState(true);
     const [editModalVisible, setEditModalVisible] = useState(false);
     const [submitModalVisible, setSubmitModalVisible] = useState(false);
     const [closeModalVisible, setCloseModalVisible] = useState(false);
-
-    // Track which slot is being toggled/edited
     const [selectedSlot, setSelectedSlot] = useState<{ dayIndex: number, slotIndex: number } | null>(null);
+
+    useEffect(() => {
+        fetchSchedule();
+    }, []);
+
+    const fetchSchedule = async () => {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                const { data: kitchen } = await supabase
+                    .from('kitchens')
+                    .select('schedule')
+                    .eq('owner_id', user.id)
+                    .single();
+
+                if (kitchen?.schedule) {
+                    setSchedule(kitchen.schedule as DaySchedule[]);
+                }
+            }
+        } catch (e) {
+            console.warn('Error fetching schedule', e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const saveSchedule = async () => {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                const { error } = await supabase
+                    .from('kitchens')
+                    .update({
+                        schedule: schedule,
+                        updated_at: new Date()
+                    })
+                    .eq('owner_id', user.id);
+
+                if (error) throw error;
+            }
+            setSubmitModalVisible(true);
+        } catch (e: any) {
+            Alert.alert('Save Failed', e.message);
+        }
+    };
 
     // Toggle Accordion
     const toggleDay = (index: number) => {
@@ -91,7 +134,7 @@ export default function AvailabilityScreen() {
 
     const handleSubmitRequest = () => {
         Keyboard.dismiss();
-        setSubmitModalVisible(true);
+        saveSchedule();
     };
 
     return (
@@ -107,68 +150,74 @@ export default function AvailabilityScreen() {
                 <View style={{ width: 28 }} />
             </View>
 
-            <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-                <Text style={styles.infoText}>
-                    If your kitchen is active, changes need admin approval.
-                    If it's in draft, changes update instantly.
-                </Text>
+            {loading ? (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color="#600E10" />
+                </View>
+            ) : (
+                <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+                    <Text style={styles.infoText}>
+                        If your kitchen is active, changes need admin approval.
+                        If it's in draft, changes update instantly.
+                    </Text>
 
-                {schedule.map((dayItem, dayIndex) => (
-                    <View key={dayItem.day} style={styles.dayContainer}>
-                        <Pressable
-                            style={[styles.dayHeader, dayItem.isOpen && styles.dayHeaderOpen]}
-                            onPress={() => toggleDay(dayIndex)}
-                        >
-                            <Text style={styles.dayTitle}>{dayItem.day}</Text>
-                            <Ionicons name={dayItem.isOpen ? "chevron-up" : "chevron-down"} size={20} color="#333" />
-                        </Pressable>
+                    {schedule.map((dayItem, dayIndex) => (
+                        <View key={dayItem.day} style={styles.dayContainer}>
+                            <Pressable
+                                style={[styles.dayHeader, dayItem.isOpen && styles.dayHeaderOpen]}
+                                onPress={() => toggleDay(dayIndex)}
+                            >
+                                <Text style={styles.dayTitle}>{dayItem.day}</Text>
+                                <Ionicons name={dayItem.isOpen ? "chevron-up" : "chevron-down"} size={20} color="#333" />
+                            </Pressable>
 
-                        {dayItem.isOpen && (
-                            <View style={styles.slotsContainer}>
-                                {dayItem.slots.map((slot, slotIndex) => (
-                                    <View key={slot.type} style={styles.slotRow}>
-                                        <Switch
-                                            trackColor={{ false: "#E0E0E0", true: "#4CAF50" }}
-                                            thumbColor={"#FFF"}
-                                            ios_backgroundColor="#E0E0E0"
-                                            onValueChange={() => handleToggleAttempt(dayIndex, slotIndex, slot.isActive)}
-                                            value={slot.isActive}
-                                            style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                                        />
-                                        <View style={styles.slotInfo}>
-                                            <Text style={styles.slotType}>{slot.type}</Text>
-                                            <Text style={styles.slotTime}>{slot.startTime} to {slot.endTime}</Text>
-                                        </View>
+                            {dayItem.isOpen && (
+                                <View style={styles.slotsContainer}>
+                                    {dayItem.slots.map((slot, slotIndex) => (
+                                        <View key={slot.type} style={styles.slotRow}>
+                                            <Switch
+                                                trackColor={{ false: "#E0E0E0", true: "#4CAF50" }}
+                                                thumbColor={"#FFF"}
+                                                ios_backgroundColor="#E0E0E0"
+                                                onValueChange={() => handleToggleAttempt(dayIndex, slotIndex, slot.isActive)}
+                                                value={slot.isActive}
+                                                style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+                                            />
+                                            <View style={styles.slotInfo}>
+                                                <Text style={styles.slotType}>{slot.type}</Text>
+                                                <Text style={styles.slotTime}>{slot.startTime} to {slot.endTime}</Text>
+                                            </View>
 
-                                        {/* Status Badge */}
-                                        <View style={[
-                                            styles.statusBadge,
-                                            slot.status === 'Active' ? styles.badgeActive :
-                                                slot.status === 'Pending' ? styles.badgePending : styles.badgeInactive
-                                        ]}>
-                                            <Text style={[
-                                                styles.statusText,
-                                                slot.status === 'Active' ? styles.textActive :
-                                                    slot.status === 'Pending' ? styles.textPending : styles.textInactive
+                                            {/* Status Badge */}
+                                            <View style={[
+                                                styles.statusBadge,
+                                                slot.status === 'Active' ? styles.badgeActive :
+                                                    slot.status === 'Pending' ? styles.badgePending : styles.badgeInactive
                                             ]}>
-                                                {slot.status}
-                                            </Text>
+                                                <Text style={[
+                                                    styles.statusText,
+                                                    slot.status === 'Active' ? styles.textActive :
+                                                        slot.status === 'Pending' ? styles.textPending : styles.textInactive
+                                                ]}>
+                                                    {slot.status}
+                                                </Text>
+                                            </View>
+
+                                            <Pressable onPress={() => openEditModal(dayIndex, slotIndex)} style={styles.editIcon}>
+                                                <Ionicons name="create-outline" size={20} color="#666" />
+                                            </Pressable>
                                         </View>
+                                    ))}
+                                </View>
+                            )}
+                        </View>
+                    ))}
 
-                                        <Pressable onPress={() => openEditModal(dayIndex, slotIndex)} style={styles.editIcon}>
-                                            <Ionicons name="create-outline" size={20} color="#666" />
-                                        </Pressable>
-                                    </View>
-                                ))}
-                            </View>
-                        )}
-                    </View>
-                ))}
-
-                <Pressable style={styles.submitBtn} onPress={handleSubmitRequest}>
-                    <Text style={styles.submitBtnText}>Submit</Text>
-                </Pressable>
-            </ScrollView>
+                    <Pressable style={styles.submitBtn} onPress={handleSubmitRequest}>
+                        <Text style={styles.submitBtnText}>Submit</Text>
+                    </Pressable>
+                </ScrollView>
+            )}
 
             {/* Edit Time Modal */}
             <Modal
@@ -287,7 +336,7 @@ export default function AvailabilityScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const styles = RNStyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#F4F7FC',

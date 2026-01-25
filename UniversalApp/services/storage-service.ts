@@ -1,18 +1,21 @@
 
 import { supabase } from '@/lib/supabase';
-import { readAsStringAsync } from 'expo-file-system/legacy';
+import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
 
 export const storageService = {
-    async uploadImage(uri: string, bucket: string = 'kitchen-media') {
+    async uploadFile(uri: string, bucket: string = 'kitchen-media', contentType: string = 'image/jpeg') {
         try {
-            const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`;
+            const ext = uri.split('.').pop() || 'jpg';
+            const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
             const filePath = `${fileName}`;
 
             // 1. Read file as base64
-            const base64 = await readAsStringAsync(uri, {
+            const base64 = await FileSystem.readAsStringAsync(uri, {
                 encoding: 'base64',
             });
+
+            if (!base64) throw new Error('Could not read file data');
 
             // 2. Convert base64 to ArrayBuffer
             const arrayBuffer = decode(base64);
@@ -21,20 +24,22 @@ export const storageService = {
             const { data, error } = await supabase.storage
                 .from(bucket)
                 .upload(filePath, arrayBuffer, {
-                    contentType: 'image/jpeg',
+                    contentType: contentType,
                 });
 
             if (error) throw error;
 
             // 4. Get public URL
-            const { data: { publicUrl } } = supabase.storage
+            const result = supabase.storage
                 .from(bucket)
                 .getPublicUrl(filePath);
 
-            return { publicUrl, error: null };
+            const publicUrl = result.data?.publicUrl;
+
+            return { publicUrl, filePath, error: null };
         } catch (error: any) {
             console.error('Storage upload error:', error);
-            return { publicUrl: null, error: error.message };
+            return { publicUrl: null, filePath: null, error: error.message };
         }
     },
 

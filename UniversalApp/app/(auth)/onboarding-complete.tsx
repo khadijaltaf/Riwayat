@@ -19,6 +19,7 @@ export default function OnboardingCompleteScreen() {
     }, []);
 
     const handleDone = () => {
+        // Use replace to clear onboarding stack
         router.replace('/(tabs)');
     };
 

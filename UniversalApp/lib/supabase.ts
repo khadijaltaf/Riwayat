@@ -19,7 +19,7 @@ const ExpoSecureStoreAdapter = {
     },
 };
 
-const storage = Platform.OS === 'web' ? AsyncStorage : ExpoSecureStoreAdapter;
+const storage = AsyncStorage;
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -66,6 +66,13 @@ export const supabase = (isValidUrl(supabaseUrl) && supabaseAnonKey !== 'YOUR_SU
                 }),
             }),
         }),
+        storage: {
+            from: () => ({
+                upload: async () => ({ data: null, error: new Error('Supabase not configured') }),
+                getPublicUrl: () => ({ data: { publicUrl: null } }),
+                remove: async () => ({ error: new Error('Supabase not configured') }),
+            }),
+        },
     } as any;
 
 // Tells Supabase Auth to continuously refresh the session automatically

@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { StyleSheet, View, TextInput, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView, Alert, Keyboard } from 'react-native';
+import { StyleSheet, View, TextInput, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView, Alert, Keyboard, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
@@ -11,24 +11,58 @@ export default function LocationScreen() {
     const [address, setAddress] = useState('');
     const [city, setCity] = useState('');
     const [area, setArea] = useState('');
+    const [mapLink, setMapLink] = useState('');
+    const [loading, setLoading] = useState(true);
     const router = useRouter();
+
+    React.useEffect(() => {
+        fetchLocationData();
+    }, []);
+
+    const fetchLocationData = async () => {
+        try {
+            const { data: session } = await supabase.from('onboarding_sessions').select('address, city, area, map_link').eq('phone', phone).single();
+            if (session) {
+                if (session.address) setAddress(session.address);
+                if (session.city) setCity(session.city);
+                if (session.area) setArea(session.area);
+                if (session.map_link) setMapLink(session.map_link);
+            }
+        } catch (e) {
+            console.warn('Error fetching location data', e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleOpenMaps = () => {
+        // Open Google Maps to let user find their location
+        const url = 'https://www.google.com/maps';
+        import('react-native').then(({ Linking }) => {
+            Linking.openURL(url).catch(err => Alert.alert('Error', 'Could not open Maps app'));
+        });
+    };
 
     const handleContinue = async () => {
         Keyboard.dismiss();
         if (!address || !city) return Alert.alert('Error', 'Please enter your address and city');
 
         // Save to Supabase
+        setLoading(true);
         try {
             const { error } = await supabase.from('onboarding_sessions').update({
                 address: address,
                 city: city,
                 area: area,
+                map_link: mapLink,
                 updated_at: new Date()
             }).eq('phone', phone);
 
             if (error) console.warn('Supabase save error:', error);
         } catch (e) {
             console.error(e);
+        } finally {
+            setLoading(false);
         }
 
         // Navigate to Screen: Menu Setup
@@ -92,21 +126,32 @@ export default function LocationScreen() {
                     </View>
 
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Google Map Location Link (Optional)</Text>
+                        <View style={styles.labelRow}>
+                            <Text style={styles.label}>Google Map Location Link</Text>
+                            <Pressable style={styles.openMapsBtn} onPress={handleOpenMaps}>
+                                <Ionicons name="map-outline" size={16} color="#600E10" />
+                                <Text style={styles.openMapsText}>Open Maps</Text>
+                            </Pressable>
+                        </View>
                         <TextInput
                             style={styles.input}
-                            placeholder="Enter your kitchen's full address"
+                            placeholder="Paste Google Maps link here"
+                            value={mapLink}
+                            onChangeText={setMapLink}
                             placeholderTextColor="#999"
                         />
+                        <Text style={styles.helperText}>Open Maps, drop a pin, share and copy the link here.</Text>
                     </View>
 
                     <View style={styles.mapPreviewSection}>
-                        <Text style={styles.label}>Live Map Preview</Text>
-                        <View style={styles.mapBox}>
+                        <Text style={styles.label}>Map Location Status</Text>
+                        <View style={[styles.mapBox, mapLink ? styles.mapBoxActive : null]}>
                             <View style={styles.mapIconCircle}>
-                                <Ionicons name="location" size={30} color="#600E10" />
+                                <Ionicons name="location" size={30} color={mapLink ? "#2E7D32" : "#600E10"} />
                             </View>
-                            <Text style={styles.mapTip}>Add Google Maps link to view location</Text>
+                            <Text style={mapLink ? styles.mapSuccess : styles.mapTip}>
+                                {mapLink ? 'Location Linked successfully' : 'Add Google Maps link to verify location'}
+                            </Text>
                         </View>
                     </View>
                 </View>
@@ -117,11 +162,15 @@ export default function LocationScreen() {
                         <Text style={styles.backButtonText}>Back</Text>
                     </Pressable>
                     <Pressable
-                        style={[styles.nextButton, (!address || !city) && styles.disabledButton]}
+                        style={[styles.nextButton, (!address || !city || loading) && styles.disabledButton]}
                         onPress={handleContinue}
-                        disabled={!address || !city}
+                        disabled={!address || !city || loading}
                     >
-                        <Text style={styles.nextButtonText}>Continue</Text>
+                        {loading ? (
+                            <ActivityIndicator color="#FFFFFF" size="small" />
+                        ) : (
+                            <Text style={styles.nextButtonText}>Continue</Text>
+                        )}
                     </Pressable>
                 </View>
             </ScrollView>
@@ -220,6 +269,43 @@ const styles = StyleSheet.create({
         marginBottom: 10,
         borderWidth: 1,
         borderColor: '#E0E0E0',
+    },
+    labelRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+    openMapsBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        backgroundColor: '#FFEFE6',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: '#E8906C',
+    },
+    openMapsText: {
+        fontSize: 12,
+        fontFamily: 'Poppins_700Bold',
+        color: '#600E10',
+    },
+    helperText: {
+        fontSize: 12,
+        fontFamily: 'Poppins_400Regular',
+        color: '#666',
+        marginTop: 6,
+    },
+    mapBoxActive: {
+        borderColor: '#2E7D32',
+        backgroundColor: '#E8F5E9',
+    },
+    mapSuccess: {
+        fontSize: 14,
+        fontFamily: 'Poppins_600SemiBold',
+        color: '#2E7D32',
     },
     mapTip: {
         fontSize: 12,

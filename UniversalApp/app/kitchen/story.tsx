@@ -1,16 +1,76 @@
 
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, TextInput, Pressable, ScrollView, Image, KeyboardAvoidingView, Platform, Keyboard, Modal } from 'react-native';
+import { StyleSheet, View, Text, TextInput, Pressable, ScrollView, Image, KeyboardAvoidingView, Platform, Keyboard, Modal, ActivityIndicator, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 
+import { supabase } from '@/lib/supabase';
+
 export default function ChefStoryScreen() {
     const router = useRouter();
-    const [chefName, setChefName] = useState("Hassan");
-    const [chefBio, setChefBio] = useState("Authentic Arabic cuisine prepared with love and traditional recipes passed down through generations. We specialize in North Indian dishes with a modern twist.");
-    const [chefJourney, setChefJourney] = useState("Authentic Arabic cuisine prepared with love and traditional recipes passed down through generations. We specialize in North Indian dishes with a modern twist.");
+    const [chefName, setChefName] = useState("");
+    const [chefBio, setChefBio] = useState("");
+    const [chefJourney, setChefJourney] = useState("");
+    const [loading, setLoading] = useState(true);
     const [submitModalVisible, setSubmitModalVisible] = useState(false);
+
+    React.useEffect(() => {
+        fetchStory();
+    }, []);
+
+    const fetchStory = async () => {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                // Fetch Owner Name from profile
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('owner_name')
+                    .eq('id', user.id)
+                    .single();
+
+                if (profile?.owner_name) setChefName(profile.owner_name);
+
+                // Fetch Story Details from kitchen
+                const { data: kitchen } = await supabase
+                    .from('kitchens')
+                    .select('chef_bio, chef_journey')
+                    .eq('owner_id', user.id)
+                    .single();
+
+                if (kitchen) {
+                    setChefBio(kitchen.chef_bio || "");
+                    setChefJourney(kitchen.chef_journey || "");
+                }
+            }
+        } catch (e) {
+            console.warn('Error fetching story', e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSave = async () => {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                const { error } = await supabase
+                    .from('kitchens')
+                    .update({
+                        chef_bio: chefBio,
+                        chef_journey: chefJourney,
+                        updated_at: new Date()
+                    })
+                    .eq('owner_id', user.id);
+
+                if (error) throw error;
+            }
+            setSubmitModalVisible(true);
+        } catch (e: any) {
+            Alert.alert('Save Failed', e.message);
+        }
+    };
 
     const renderMediaSection = (title: string, type: 'audio' | 'video' | 'picture', note: string) => (
         <View style={styles.sectionContainer}>
@@ -66,54 +126,70 @@ export default function ChefStoryScreen() {
                 <View style={{ width: 28 }} />
             </View>
 
-            <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-
-                <View style={styles.formGroup}>
-                    <Text style={styles.label}>Chef Name</Text>
-                    <TextInput
-                        style={styles.input}
-                        value={chefName}
-                        onChangeText={setChefName}
-                    />
+            {loading ? (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color="#600E10" />
                 </View>
+            ) : (
+                <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
-                <View style={styles.formGroup}>
-                    <Text style={styles.label}>Chef Bio</Text>
-                    <TextInput
-                        style={[styles.input, styles.textArea]}
-                        value={chefBio}
-                        onChangeText={setChefBio}
-                        multiline
-                        textAlignVertical="top"
-                    />
-                </View>
+                    {!chefBio && !chefJourney && (
+                        <View style={styles.blankNotice}>
+                            <Ionicons name="sparkles" size={40} color="#F28B50" />
+                            <Text style={styles.blankTitle}>Share Your Story</Text>
+                            <Text style={styles.blankText}>Tell your customers about your culinary journey and background.</Text>
+                        </View>
+                    )}
 
-                <View style={styles.formGroup}>
-                    <Text style={styles.label}>Chef Journey</Text>
-                    <TextInput
-                        style={[styles.input, styles.textArea]}
-                        value={chefJourney}
-                        onChangeText={setChefJourney}
-                        multiline
-                        textAlignVertical="top"
-                    />
-                </View>
+                    <View style={styles.formGroup}>
+                        <Text style={styles.label}>Chef Name</Text>
+                        <TextInput
+                            style={[styles.input, { backgroundColor: '#F0F0F0', color: '#666' }]}
+                            value={chefName}
+                            editable={false}
+                        />
+                    </View>
 
-                {renderMediaSection("Audio", "audio", "You can add many Audio, but only one can be active.")}
-                {renderMediaSection("Video", "video", "You can add many Videos, but only one can be active.")}
-                {renderMediaSection("Pictures", "picture", "You can add many Images.")}
+                    <View style={styles.formGroup}>
+                        <Text style={styles.label}>Chef Bio</Text>
+                        <TextInput
+                            style={[styles.input, styles.textArea]}
+                            value={chefBio}
+                            onChangeText={setChefBio}
+                            multiline
+                            textAlignVertical="top"
+                            placeholder="Tell us about yourself..."
+                        />
+                    </View>
 
-                <View style={{ height: 20 }} />
+                    <View style={styles.formGroup}>
+                        <Text style={styles.label}>Chef Journey</Text>
+                        <TextInput
+                            style={[styles.input, styles.textArea]}
+                            value={chefJourney}
+                            onChangeText={setChefJourney}
+                            multiline
+                            textAlignVertical="top"
+                            placeholder="Tell us about your culinary journey..."
+                        />
+                    </View>
 
-                <Pressable style={styles.saveBtn} onPress={() => {
-                    Keyboard.dismiss();
-                    setSubmitModalVisible(true);
-                }}>
-                    <Text style={styles.saveText}>Save Story</Text>
-                </Pressable>
+                    {renderMediaSection("Audio", "audio", "You can add many Audio, but only one can be active.")}
+                    {renderMediaSection("Video", "video", "You can add many Videos, but only one can be active.")}
+                    {renderMediaSection("Pictures", "picture", "You can add many Images.")}
 
-                <View style={{ height: 40 }} />
-            </ScrollView>
+                    <View style={{ height: 20 }} />
+
+                    <Pressable style={styles.saveBtn} onPress={() => {
+                        Keyboard.dismiss();
+                        handleSave();
+                    }}>
+                        <Text style={styles.saveText}>Save Story</Text>
+                    </Pressable>
+
+                    <View style={{ height: 40 }} />
+                </ScrollView>
+            )}
 
             {/* Submit Request Modal */}
             <Modal
@@ -198,6 +274,28 @@ const styles = StyleSheet.create({
         fontFamily: 'Poppins_400Regular',
         color: '#1A1A1A',
         elevation: 1,
+    },
+    blankNotice: {
+        backgroundColor: '#FFEFE6',
+        borderRadius: 16,
+        padding: 20,
+        alignItems: 'center',
+        marginBottom: 30,
+        borderWidth: 1,
+        borderColor: '#E8906C',
+    },
+    blankTitle: {
+        fontSize: 18,
+        fontFamily: 'Poppins_700Bold',
+        color: '#600E10',
+        marginTop: 10,
+    },
+    blankText: {
+        fontSize: 14,
+        fontFamily: 'Poppins_400Regular',
+        color: '#4A4A4A',
+        textAlign: 'center',
+        marginTop: 5,
     },
     textArea: {
         minHeight: 120,

@@ -1,26 +1,74 @@
 
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, TextInput, Pressable, ScrollView, Modal, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
+import { StyleSheet, View, Text, TextInput, Pressable, ScrollView, Modal, KeyboardAvoidingView, Platform, Keyboard, ActivityIndicator, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 
+import { supabase } from '@/lib/supabase';
+
 export default function KitchenAddressScreen() {
     const router = useRouter();
 
-    const [deliveryInstructions, setDeliveryInstructions] = useState("abc");
+    const [deliveryInstructions, setDeliveryInstructions] = useState("");
+    const [addressName, setAddressName] = useState("");
+    const [fullAddress, setFullAddress] = useState("");
+    const [city, setCity] = useState("");
+    const [cityZone, setCityZone] = useState("");
+    const [googleMapLink, setGoogleMapLink] = useState("");
+    const [loading, setLoading] = useState(true);
     const [submitModalVisible, setSubmitModalVisible] = useState(false);
 
-    // Read-only values from screenshot
-    const addressName = "Abc";
-    const fullAddress = "123 MG Road, Bangalore - 560001";
-    const city = "Sadia Ariba"; // This looks like a name selected in a city dropdown? Use as string for now.
-    const cityZone = "Abc";
-    const googleMapLink = "abc";
+    React.useEffect(() => {
+        fetchLocationData();
+    }, []);
 
-    const handleConfirm = () => {
+    const fetchLocationData = async () => {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                const { data: kitchen } = await supabase
+                    .from('kitchens')
+                    .select('address, city, area')
+                    .eq('owner_id', user.id)
+                    .single();
+
+                if (kitchen) {
+                    setFullAddress(kitchen.address || '');
+                    setCity(kitchen.city || '');
+                    setCityZone(kitchen.area || '');
+                    // instructions might be in a separate column or JSON
+                    // setDeliveryInstructions(kitchen.instructions);
+                }
+            }
+        } catch (e) {
+            console.warn('Error fetching location', e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleConfirm = async () => {
         Keyboard.dismiss();
-        setSubmitModalVisible(true);
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                const { error } = await supabase
+                    .from('kitchens')
+                    .update({
+                        address: fullAddress,
+                        city: city,
+                        area: cityZone,
+                        updated_at: new Date()
+                    })
+                    .eq('owner_id', user.id);
+
+                if (error) throw error;
+            }
+            setSubmitModalVisible(true);
+        } catch (e: any) {
+            Alert.alert('Update Failed', e.message);
+        }
     };
 
     return (
@@ -30,82 +78,87 @@ export default function KitchenAddressScreen() {
         >
             <StatusBar style="dark" />
 
-            {/* Header */}
-            <View style={styles.header}>
-                <Pressable onPress={() => router.back()} style={styles.backBtn}>
-                    <Ionicons name="chevron-back" size={28} color="#600E10" />
-                </Pressable>
-                <Text style={styles.headerTitle}>Kitchen Address</Text>
-                <View style={{ width: 28 }} />
-            </View>
+            {loading ? (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color="#600E10" />
+                </View>
+            ) : (
+                <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
-            <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-
-                {/* Disabled Fields */}
-                <View style={styles.formGroup}>
-                    <Text style={styles.label}>Address Name</Text>
-                    <View style={styles.disabledInput}>
-                        <Text style={styles.disabledText}>{addressName}</Text>
+                    {/* Editable Fields (User requested to be able to edit) */}
+                    <View style={styles.formGroup}>
+                        <Text style={styles.label}>Address Name</Text>
+                        <TextInput
+                            style={styles.input}
+                            value={addressName}
+                            onChangeText={setAddressName}
+                        />
                     </View>
-                </View>
 
-                <View style={styles.formGroup}>
-                    <Text style={styles.label}>Full Address</Text>
-                    <View style={styles.disabledInput}>
-                        <Text style={styles.disabledText}>{fullAddress}</Text>
+                    <View style={styles.formGroup}>
+                        <Text style={styles.label}>Full Address</Text>
+                        <TextInput
+                            style={styles.input}
+                            value={fullAddress}
+                            onChangeText={setFullAddress}
+                        />
                     </View>
-                </View>
 
-                <View style={styles.formGroup}>
-                    <Text style={styles.label}>City</Text>
-                    <View style={styles.disabledInput}>
-                        <Text style={styles.disabledText}>{city}</Text>
-                        <Ionicons name="chevron-down" size={20} color="#999" style={{ position: 'absolute', right: 15, top: 15 }} />
+                    <View style={styles.formGroup}>
+                        <Text style={styles.label}>City</Text>
+                        <TextInput
+                            style={styles.input}
+                            value={city}
+                            onChangeText={setCity}
+                        />
                     </View>
-                </View>
 
-                <View style={styles.formGroup}>
-                    <Text style={styles.label}>City Zone</Text>
-                    <View style={styles.disabledInput}>
-                        <Text style={styles.disabledText}>{cityZone}</Text>
-                        <Ionicons name="chevron-down" size={20} color="#999" style={{ position: 'absolute', right: 15, top: 15 }} />
+                    <View style={styles.formGroup}>
+                        <Text style={styles.label}>City Zone</Text>
+                        <TextInput
+                            style={styles.input}
+                            value={cityZone}
+                            onChangeText={setCityZone}
+                        />
                     </View>
-                </View>
 
-                {/* Editable Field */}
-                <View style={styles.formGroup}>
-                    <Text style={styles.label}>Delivery Instructions & Nearest Landmark</Text>
-                    <TextInput
-                        style={styles.input}
-                        value={deliveryInstructions}
-                        onChangeText={setDeliveryInstructions}
-                    />
-                </View>
-
-                {/* Disabled Map Link */}
-                <View style={styles.formGroup}>
-                    <Text style={styles.label}>Google Map Location Link</Text>
-                    <View style={styles.disabledInput}>
-                        <Text style={styles.disabledText}>{googleMapLink}</Text>
+                    {/* Editable Field */}
+                    <View style={styles.formGroup}>
+                        <Text style={styles.label}>Delivery Instructions & Nearest Landmark</Text>
+                        <TextInput
+                            style={styles.input}
+                            value={deliveryInstructions}
+                            onChangeText={setDeliveryInstructions}
+                        />
                     </View>
-                </View>
 
-                {/* Live Map Preview */}
-                <View style={styles.formGroup}>
-                    <Text style={styles.label}>Live Map Preview</Text>
-                    <View style={styles.mapContainer}>
-                        <View style={styles.pinCircle}>
-                            <Ionicons name="location-outline" size={20} color="#000" />
+                    {/* Map Link */}
+                    <View style={styles.formGroup}>
+                        <Text style={styles.label}>Google Map Location Link</Text>
+                        <TextInput
+                            style={styles.input}
+                            value={googleMapLink}
+                            onChangeText={setGoogleMapLink}
+                        />
+                    </View>
+
+                    {/* Live Map Preview */}
+                    <View style={styles.formGroup}>
+                        <Text style={styles.label}>Live Map Preview</Text>
+                        <View style={styles.mapContainer}>
+                            <View style={styles.pinCircle}>
+                                <Ionicons name="location-outline" size={20} color="#000" />
+                            </View>
+                            <Text style={styles.mapHelperText}>Add Google Maps link to view location</Text>
                         </View>
-                        <Text style={styles.mapHelperText}>Add Google Maps link to view location</Text>
                     </View>
-                </View>
 
-                <Pressable style={styles.saveBtn} onPress={handleConfirm}>
-                    <Text style={styles.saveText}>Confirm</Text>
-                </Pressable>
+                    <Pressable style={styles.saveBtn} onPress={handleConfirm}>
+                        <Text style={styles.saveText}>Confirm</Text>
+                    </Pressable>
 
-            </ScrollView>
+                </ScrollView>
+            )}
 
             {/* Submit Request Modal */}
             <Modal

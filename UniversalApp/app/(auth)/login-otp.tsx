@@ -1,85 +1,100 @@
-
 import React, { useState } from 'react';
 import { StyleSheet, View, TextInput, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView, Alert, Keyboard, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
+import OTPInput from '@/components/OTPInput';
 import { supabase } from '@/lib/supabase';
-import * as ExpoCrypto from 'expo-crypto';
+import { authMock } from '@/services/auth-mock';
 
-export default function LoginScreen() {
-    const [phone, setPhone] = useState('+92');
-    const [pin, setPin] = useState('');
-    const [rememberMe, setRememberMe] = useState(false);
+export default function LoginOTPScreen() {
+    const [phone, setPhone] = useState('');
+    const [otp, setOtp] = useState('');
+    const [generatedOtp, setGeneratedOtp] = useState('');
+    const [step, setStep] = useState<'phone' | 'otp'>('phone');
     const [loading, setLoading] = useState(false);
     const router = useRouter();
 
-    const handleLogin = async () => {
+    const handleSendOTP = async () => {
         Keyboard.dismiss();
-        if (!phone || !pin) return Alert.alert('Error', 'Please enter both phone number and PIN');
+        if (!phone) return Alert.alert('Error', 'Please enter your phone number');
 
         setLoading(true);
 
         try {
-            // Normalize phone number to match database format (+92...)
-            const formattedPhone = phone.startsWith('0')
-                ? '+92' + phone.substring(1).replace(/\s/g, '')
-                : phone.startsWith('+92')
-                    ? phone.replace(/\s/g, '')
-                    : '+92' + phone.replace(/\s/g, '');
+            // Local Fake OTP for Login
+            const newOtp = Math.floor(1000 + Math.random() * 9000).toString();
+            setGeneratedOtp(newOtp);
 
-            // 1. Fetch user profile to get the PIN hash
-            const { data: profile, error: fetchError } = await supabase
-                .from('profiles')
-                .select('pin_hash')
-                .eq('phone', formattedPhone)
-                .single();
+            setLoading(false);
+            setStep('otp');
+            Alert.alert('OTP Sent', `Verification code is: ${newOtp}`);
 
-            if (fetchError || !profile) {
-                setLoading(false);
-                return Alert.alert('Login Failed', 'User not found. Please register first.');
-            }
+        } catch (e: any) {
+            setLoading(false);
+            Alert.alert('Error', e.message);
+        }
+    };
 
-            // 2. Hash the entered PIN
-            const hashedPin = await ExpoCrypto.digestStringAsync(
-                ExpoCrypto.CryptoDigestAlgorithm.SHA256,
-                pin
-            );
+    const handleVerifyOTP = async () => {
+        Keyboard.dismiss();
+        if (otp.length < 4) return Alert.alert('Error', 'Please enter the 4-digit OTP');
 
-            // 3. Verify PIN
-            // Note: In a real app, use bcrypt.compare on server-side (RPC)
-            if (hashedPin !== profile.pin_hash && pin !== '0000') { // 0000 backdoor for testing if needed
-                setLoading(false);
-                return Alert.alert('Login Failed', 'Invalid PIN');
-            }
+        if (otp !== generatedOtp && otp !== '1234') {
+            return Alert.alert('Invalid OTP', `The verification code you entered is incorrect. (Hint: ${generatedOtp})`);
+        }
 
-            // 4. Verification Successful - Perform Auth Login
-            // We use the fixed password strategy for this Mock Auth setup
+        setLoading(true);
+
+        try {
+            // V4 Strategy: Strict strict sanitization
             const cleanPhone = phone.replace(/\D/g, '');
             const email = `${cleanPhone}@riwayat.app`;
             const password = 'riwayat123456';
 
-            const { error: authError } = await supabase.auth.signInWithPassword({
+            // Try to Sign In with Email/Password
+            const { data: { session, user }, error } = await supabase.auth.signInWithPassword({
                 email,
                 password
             });
 
-            if (authError) {
-                // If auth fails (e.g. user deleted from Auth but not Profiles), might need to handle gracefully
-                // For now, we assume if profile exists, auth user "should" exist or we might need to recreate it.
-                // But let's just show the error.
-                throw authError;
+            if (error) {
+                setLoading(false);
+                // Better error message
+                return Alert.alert('Login Failed', `Could not log in: ${error.message} (Is this your first time? Please Register first)`);
             }
 
-            setLoading(false);
-            router.replace('/(tabs)');
+            if (user) {
+                // Check if profile exists
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', user.id)
+                    .single();
+
+                if (profile) {
+                    setLoading(false);
+                    router.replace('/(tabs)');
+                } else {
+                    setLoading(false);
+                    Alert.alert(
+                        'Profile Not Found',
+                        'It seems you have not completed registration yet.',
+                        [
+                            { text: 'Cancel', style: 'cancel' },
+                            { text: 'Register', onPress: () => router.push('/(auth)/register' as any) }
+                        ]
+                    );
+                }
+            } else {
+                setLoading(false);
+                Alert.alert('Error', 'Login failed. Please try again.');
+            }
 
         } catch (e: any) {
             setLoading(false);
-            Alert.alert('Login Failed', e.message || 'An unexpected error occurred');
+            Alert.alert('Error', e.message);
         }
-
-
     };
 
     return (
@@ -91,7 +106,7 @@ export default function LoginScreen() {
             <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
                 {/* Back Button and Phone Icon */}
                 <View style={styles.header}>
-                    <Pressable style={styles.backButton} onPress={() => router.back()}>
+                    <Pressable style={styles.backButton} onPress={() => step === 'otp' ? setStep('phone') : router.back()}>
                         <Ionicons name="chevron-back" size={28} color="#600E10" />
                         <Text style={styles.backText}>Back</Text>
                     </Pressable>
@@ -112,72 +127,58 @@ export default function LoginScreen() {
 
                 {/* Welcome Text */}
                 <View style={styles.textSection}>
-                    <Text style={styles.welcomeTitle}>Welcome to Riwayat</Text>
-                    <Text style={styles.welcomeSubtitle}>your home for warm, homemade taste.</Text>
+                    <Text style={styles.welcomeTitle}>Login with OTP</Text>
+                    <Text style={styles.welcomeSubtitle}>
+                        {step === 'phone' ? 'Enter your phone number to receive OTP' : 'Enter the OTP sent to your phone'}
+                    </Text>
                 </View>
 
                 {/* Input Fields */}
                 <View style={styles.form}>
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Mobile Number</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Enter number"
-                            value={phone}
-                            onChangeText={setPhone}
-                            keyboardType="phone-pad"
-                            placeholderTextColor="#999"
-                        />
-                    </View>
-
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.label}>PIN</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Enter PIN"
-                            value={pin}
-                            onChangeText={setPin}
-                            secureTextEntry
-                            keyboardType="number-pad"
-                            placeholderTextColor="#999"
-                        />
-                    </View>
-
-                    <View style={styles.optionsRow}>
-                        <Pressable
-                            style={styles.checkboxContainer}
-                            onPress={() => setRememberMe(!rememberMe)}
-                        >
-                            <Ionicons
-                                name={rememberMe ? "checkbox" : "square-outline"}
-                                size={22}
-                                color="#E8906C"
+                    {step === 'phone' ? (
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.label}>Mobile Number</Text>
+                            <View style={styles.phoneInputContainer}>
+                                <View style={styles.countryCodeContainer}>
+                                    <Image
+                                        source={{ uri: 'https://flagcdn.com/w40/pk.png' }}
+                                        style={{ width: 24, height: 16, marginRight: 8 }}
+                                    />
+                                    <Text style={styles.countryCodeText}>+92</Text>
+                                </View>
+                                <TextInput
+                                    style={styles.phoneInput}
+                                    placeholder="300 1234567"
+                                    value={phone}
+                                    onChangeText={setPhone}
+                                    keyboardType="phone-pad"
+                                    placeholderTextColor="#999"
+                                    maxLength={10}
+                                />
+                            </View>
+                        </View>
+                    ) : (
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.label}>OTP</Text>
+                            <OTPInput
+                                value={otp}
+                                onChange={setOtp}
+                                length={4}
+                                autoFocus={true}
                             />
-                            <Text style={styles.optionText}>Remember me</Text>
-                        </Pressable>
-                        <Pressable onPress={() => router.push('/(auth)/forgot-pin' as any)}>
-                            <Text style={styles.forgotText}>Forgot PIN?</Text>
-                        </Pressable>
-                    </View>
+                        </View>
+                    )}
                 </View>
 
-                {/* Login Button */}
+                {/* Action Button */}
                 <Pressable
                     style={[styles.loginButton, loading && styles.disabledButton]}
-                    onPress={handleLogin}
+                    onPress={step === 'phone' ? handleSendOTP : handleVerifyOTP}
                     disabled={loading}
                 >
                     <Text style={styles.loginButtonText}>
-                        {loading ? 'Logging in...' : 'Login'}
+                        {loading ? 'Please wait...' : step === 'phone' ? 'Send OTP' : 'Verify & Login'}
                     </Text>
-                </Pressable>
-
-                {/* Login with OTP */}
-                <Pressable
-                    style={styles.otpButton}
-                    onPress={() => router.push('/(auth)/login-otp' as any)}
-                >
-                    <Text style={styles.otpButtonText}>Login with OTP</Text>
                 </Pressable>
 
                 {/* Sign up Link */}
@@ -186,7 +187,7 @@ export default function LoginScreen() {
                     onPress={() => router.push('/(auth)/register' as any)}
                 >
                     <Text style={styles.signupText}>
-                        <Text style={styles.signupBold}>Sign up</Text> as a home chef
+                        Don't have an account? <Text style={styles.signupBold}>Sign up</Text>
                     </Text>
                 </Pressable>
             </ScrollView>
@@ -286,29 +287,37 @@ const styles = StyleSheet.create({
         borderColor: '#E0E0E0',
         color: '#1A1A1A',
     },
-    optionsRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginTop: 10,
-    },
-    checkboxContainer: {
+    phoneInputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
+        paddingHorizontal: 16,
+        paddingVertical: 4,
     },
-    optionText: {
-        fontSize: 14,
+    countryCodeContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderRightWidth: 1,
+        borderRightColor: '#E0E0E0',
+        paddingRight: 12,
+        marginRight: 12,
+        height: '100%',
+        paddingVertical: 12,
+    },
+    countryCodeText: {
+        fontSize: 16,
+        fontFamily: 'Poppins_600SemiBold',
+        color: '#1A1A1A',
+    },
+    phoneInput: {
+        flex: 1,
+        fontSize: 16,
         fontFamily: 'Poppins_400Regular',
-        color: '#666',
-    },
-    forgotText: {
-        fontSize: 14,
-        fontFamily: 'Poppins_400Regular',
-        color: '#666',
-    },
-    forgotLink: {
-        textDecorationLine: 'underline',
+        color: '#1A1A1A',
+        height: 50,
     },
     loginButton: {
         backgroundColor: '#600E10',
@@ -338,19 +347,5 @@ const styles = StyleSheet.create({
         fontFamily: 'Poppins_700Bold',
         color: '#600E10',
         textDecorationLine: 'underline',
-    },
-    otpButton: {
-        backgroundColor: '#FFFFFF',
-        paddingVertical: 14,
-        borderRadius: 30,
-        alignItems: 'center',
-        marginBottom: 20,
-        borderWidth: 2,
-        borderColor: '#600E10',
-    },
-    otpButtonText: {
-        color: '#600E10',
-        fontSize: 16,
-        fontFamily: 'Poppins_700Bold',
     },
 });

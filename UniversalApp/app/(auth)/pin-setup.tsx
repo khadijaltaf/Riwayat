@@ -1,17 +1,20 @@
 
 import React, { useState } from 'react';
-import { StyleSheet, View, TextInput, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView, Keyboard } from 'react-native';
+import { StyleSheet, View, TextInput, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView, Keyboard, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
+import OTPInput from '@/components/OTPInput';
 import { supabase } from '@/lib/supabase';
 import { useLocalSearchParams } from 'expo-router';
+import * as ExpoCrypto from 'expo-crypto';
 
 export default function PinSetupScreen() {
     const { phone } = useLocalSearchParams<{ phone: string }>();
     const [pin, setPin] = useState('');
     const [confirmPin, setConfirmPin] = useState('');
     const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
     const router = useRouter();
 
     const handleContinue = async () => {
@@ -20,20 +23,35 @@ export default function PinSetupScreen() {
         if (pin !== confirmPin) return setError('PIN does not match. Please try again.');
 
         setError('');
+        setLoading(true);
 
-        // Save PIN to Supabase (Mocking as password)
         try {
+            // Hash the PIN using standard SHA-256 (sufficient for 4-digit PIN in this context)
+            const hashedPin = await ExpoCrypto.digestStringAsync(
+                ExpoCrypto.CryptoDigestAlgorithm.SHA256,
+                pin
+            );
+
             const { error } = await supabase.from('onboarding_sessions').update({
-                password_hash: pin, // Using PIN as password for now
+                temp_pin_hash: hashedPin,
+                step: 'owner_details',
                 updated_at: new Date()
             }).eq('phone', phone);
-            if (error) console.warn('Supabase save error:', error);
-        } catch (e) {
-            console.error(e);
-        }
 
-        // Navigate to Screen 7: Owner Details
-        router.push({ pathname: '/(auth)/owner-details', params: { phone } });
+            if (error) {
+                console.warn('Supabase save error:', error);
+                // Optionally handle error (e.g., retry or show alert) but we proceed for now
+            }
+
+            // Navigate to Screen 7: Owner Details
+            router.push({ pathname: '/(auth)/owner-details', params: { phone } });
+
+        } catch (e) {
+            console.error('PIN Hashing or Save Error:', e);
+            setError('Failed to save PIN. Please try again.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -61,35 +79,29 @@ export default function PinSetupScreen() {
                 <View style={styles.inputSection}>
                     <View style={styles.inputGroup}>
                         <Text style={styles.label}>Set Your PIN</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Type Here"
+                        <OTPInput
                             value={pin}
-                            onChangeText={(text) => {
+                            onChange={(text) => {
                                 setPin(text);
                                 if (error) setError('');
                             }}
-                            keyboardType="number-pad"
-                            secureTextEntry
-                            maxLength={6}
-                            placeholderTextColor="#999"
+                            length={4}
+                            secureTextEntry={true}
+                            autoFocus={true}
                         />
                     </View>
 
                     <View style={styles.inputGroup}>
                         <Text style={styles.label}>Confirm Your PIN</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Type Here"
+                        <OTPInput
                             value={confirmPin}
-                            onChangeText={(text) => {
+                            onChange={(text) => {
                                 setConfirmPin(text);
                                 if (error) setError('');
                             }}
-                            keyboardType="number-pad"
-                            secureTextEntry
-                            maxLength={6}
-                            placeholderTextColor="#999"
+                            length={4}
+                            secureTextEntry={true}
+                            autoFocus={false}
                         />
                     </View>
 
@@ -104,11 +116,15 @@ export default function PinSetupScreen() {
                         <Text style={styles.backButtonText}>Back</Text>
                     </Pressable>
                     <Pressable
-                        style={[styles.nextButton, (!pin || !confirmPin) && styles.disabledButton]}
+                        style={[styles.nextButton, (!pin || !confirmPin || loading) && styles.disabledButton]}
                         onPress={handleContinue}
-                        disabled={!pin || !confirmPin}
+                        disabled={!pin || !confirmPin || loading}
                     >
-                        <Text style={styles.nextButtonText}>Continue</Text>
+                        {loading ? (
+                            <ActivityIndicator color="#FFFFFF" size="small" />
+                        ) : (
+                            <Text style={styles.nextButtonText}>Continue</Text>
+                        )}
                     </Pressable>
                 </View>
             </ScrollView>

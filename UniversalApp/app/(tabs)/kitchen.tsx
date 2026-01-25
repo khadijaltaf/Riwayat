@@ -1,6 +1,7 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, ScrollView, Pressable, Image, Platform } from 'react-native';
+import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
@@ -26,7 +27,7 @@ const KITCHEN_MENU_ITEMS = [
         id: 'feedback',
         title: 'Feedback',
         icon: 'star-outline',
-        route: '/kitchen/feedback',
+        route: '/feedback',
         color: '#FFECDA',
         iconColor: '#D84315'
     },
@@ -34,7 +35,7 @@ const KITCHEN_MENU_ITEMS = [
         id: 'request',
         title: 'Kitchen Request',
         icon: 'document-text-outline',
-        route: '/kitchen/request',
+        route: '/kitchen/details',
         color: '#FFECDA',
         iconColor: '#D84315'
     },
@@ -74,6 +75,38 @@ const KITCHEN_MENU_ITEMS = [
 
 export default function KitchenScreen() {
     const router = useRouter();
+    const [ownerName, setOwnerName] = useState('Partner');
+    const [kitchenName, setKitchenName] = useState('My Kitchen');
+    const [avatarUrl, setAvatarUrl] = useState('https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-1.2.1&auto=format&fit=crop&w=100&q=80');
+
+    useEffect(() => {
+        fetchProfile();
+    }, []);
+
+    const fetchProfile = async () => {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                const { data: profile } = await supabase.from('profiles').select('owner_name, avatar_url').eq('id', user.id).single();
+                if (profile?.owner_name) setOwnerName(profile.owner_name);
+                if (profile?.avatar_url) setAvatarUrl(profile.avatar_url);
+
+                const { data: kitchen } = await supabase.from('kitchens').select('name').eq('owner_id', user.id).single();
+                if (kitchen?.name) setKitchenName(kitchen.name);
+            }
+        } catch (e) {
+            console.warn('Error fetching profile in Kitchen tab', e);
+        }
+    };
+
+    const handleLogout = async () => {
+        try {
+            await supabase.auth.signOut();
+            router.replace('/(auth)/login');
+        } catch (e) {
+            console.error('Logout failed', e);
+        }
+    };
 
     return (
         <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -83,15 +116,15 @@ export default function KitchenScreen() {
             <View style={styles.header}>
                 <View style={styles.headerRow}>
                     <Image
-                        source={{ uri: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-1.2.1&auto=format&fit=crop&w=100&q=80' }}
+                        source={{ uri: avatarUrl }}
                         style={styles.avatar}
                     />
                     <View style={styles.welcomeTextContainer}>
-                        <Text style={styles.greeting}>Hello,</Text>
-                        <Text style={styles.kitchenName}>Ananya's Kitchen</Text>
+                        <Text style={styles.greeting}>Hello, {ownerName || 'Partner'}</Text>
+                        <Text style={styles.kitchenName}>{kitchenName}</Text>
                     </View>
                 </View>
-                <Pressable style={styles.notificationBtn}>
+                <Pressable style={styles.notificationBtn} onPress={() => router.push('/notifications' as any)}>
                     <Ionicons name="notifications" size={24} color="#D84315" />
                     <View style={styles.notificationDot} />
                 </Pressable>
@@ -112,6 +145,17 @@ export default function KitchenScreen() {
                         <Ionicons name="chevron-forward" size={20} color="#CCC" style={styles.arrow} />
                     </Pressable>
                 ))}
+
+                {/* Logout Button */}
+                <Pressable
+                    style={[styles.listItem, styles.logoutItem]}
+                    onPress={handleLogout}
+                >
+                    <View style={[styles.iconBox, { backgroundColor: '#FFEBEE' }]}>
+                        <Ionicons name="log-out-outline" size={22} color="#D32F2F" />
+                    </View>
+                    <Text style={[styles.itemTitle, { color: '#D32F2F' }]}>Logout</Text>
+                </Pressable>
             </View>
             <View style={{ height: 80 }} />
         </ScrollView>
@@ -122,6 +166,11 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#F4F7FC',
+    },
+    logoutItem: {
+        marginTop: 10,
+        borderWidth: 1,
+        borderColor: '#FFEBEE',
     },
     content: {
         paddingHorizontal: 20,

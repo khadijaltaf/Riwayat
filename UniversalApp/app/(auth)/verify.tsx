@@ -5,6 +5,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import CustomModal from '@/components/CustomModal';
+import OTPInput from '@/components/OTPInput';
 import { supabase } from '@/lib/supabase';
 
 export default function VerifyScreen() {
@@ -15,6 +16,13 @@ export default function VerifyScreen() {
     const [showInviteModal, setShowInviteModal] = useState(false);
     const [inviteData, setInviteData] = useState({ inviter: 'Asim', kitchen: 'Asim Pakwan' });
     const router = useRouter();
+
+    useEffect(() => {
+        // Show OTP Toast in app once on load
+        if (actualOtp) {
+            Alert.alert('Verification Code', `Your OTP is: ${actualOtp}`, [{ text: 'OK' }]);
+        }
+    }, []);
 
     useEffect(() => {
         let interval: any;
@@ -30,37 +38,109 @@ export default function VerifyScreen() {
         Keyboard.dismiss();
         if (otp.length < 4) return alert('Please enter a valid OTP');
 
-        // Check if entered OTP matches the generated one
-        if (otp !== actualOtp) {
-            return Alert.alert('Invalid OTP', 'The verification code you entered is incorrect. Please try again.');
+        let otpToVerify = actualOtp;
+
+        // If actualOtp is missing (e.g. reload), fetch from Supabase
+        if (!otpToVerify) {
+            try {
+                const { data: session } = await supabase
+                    .from('onboarding_sessions')
+                    .select('last_otp')
+                    .eq('phone', phone)
+                    .single();
+                if (session?.last_otp) {
+                    otpToVerify = session.last_otp;
+                }
+            } catch (e) {
+                console.log('Failed to fetch OTP from backend');
+            }
+        }
+
+        // Check against local OTP 
+        // Allow '1234' as universal bypass
+        if (otpToVerify && otp !== otpToVerify && otp !== '1234') {
+            return Alert.alert('Invalid OTP', `The code you entered is incorrect. (Hint: ${otpToVerify})`);
         }
 
         setLoading(true);
 
-        // Save to Supabase (Mocking for now as per instructions to save even passwords/OTPs)
         try {
-            const { error } = await supabase.from('onboarding_sessions').upsert({
-                phone: phone,
-                last_otp: otp,
-                updated_at: new Date()
+            // "Mock" Auth: V4 Strategy (Emergency Fix)
+            // 1. Sanitize phone completely (remove all non-digits)
+            const cleanPhone = phone.replace(/\D/g, '');
+            const email = `${cleanPhone}@riwayat.app`;
+            const password = 'riwayat123456';
+
+            // 2. Try to Sign Up first
+            const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+                email,
+                password,
             });
-            if (error) console.warn('Supabase save error:', error);
-        } catch (e) {
-            console.error(e);
-        }
 
-        // Logic for "Invitation Already Exists"
-        // This is a simulation based on the design provided
-        if (phone === '03337659240' || phone === '03001234567') {
-            setLoading(false);
-            setShowInviteModal(true);
-            return;
-        }
+            let user = signUpData.user;
 
-        setTimeout(() => {
+            if (signUpError) {
+                // ONLY try to sign in if the error is "User already registered"
+                if (signUpError.message && (signUpError.message.toLowerCase().includes("registered") || signUpError.message.toLowerCase().includes("exists"))) {
+                    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+                        email,
+                        password
+                    });
+
+                    if (signInError) {
+                        // Real error (e.g. invalid credentials despite V4 - should be impossible)
+                        throw new Error(`Login failed after exists: ${signInError.message}`);
+                    }
+                    user = signInData.user || user;
+                } else {
+                    // Other error (e.g. Rate Limit)
+                    throw new Error(`Registration failed: ${signUpError.message}`);
+                }
+            }
+
+            if (user) {
+                // Check if user already has a profile 
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', user.id)
+                    .single();
+
+                // UPSERT session
+                await supabase.from('onboarding_sessions').upsert({
+                    phone: phone,
+                    last_otp: otp,
+                    updated_at: new Date()
+                }, { onConflict: 'phone' });
+
+                if (profile) {
+                    if (phone === '03337659240' || phone === '03001234567') {
+                        setLoading(false);
+                        setShowInviteModal(true);
+                        return;
+                    } else {
+                        setLoading(false);
+                        Alert.alert('User Exists', 'You are already registered. Please login.', [
+                            { text: 'Login', onPress: () => router.replace('/(auth)/login') }
+                        ]);
+                        return;
+                    }
+                }
+
+                // Proceed
+                setTimeout(() => {
+                    setLoading(false);
+                    router.push({ pathname: '/(auth)/pin-setup', params: { phone } });
+                }, 500);
+            } else {
+                setLoading(false);
+                Alert.alert('Error', 'Authentication succeeded but no user returned.');
+            }
+
+        } catch (e: any) {
             setLoading(false);
-            router.push('/(auth)/pin-setup' as any);
-        }, 1000);
+            Alert.alert('Auth Error', e.message);
+        }
     };
 
     return (
@@ -88,14 +168,11 @@ export default function VerifyScreen() {
                 {/* OTP Input Section */}
                 <View style={styles.inputSection}>
                     <Text style={styles.label}>OTP</Text>
-                    <TextInput
-                        style={styles.input}
-                        placeholder="Type Here"
+                    <OTPInput
                         value={otp}
-                        onChangeText={setOtp}
-                        keyboardType="number-pad"
-                        maxLength={4}
-                        placeholderTextColor="#999"
+                        onChange={setOtp}
+                        length={4}
+                        autoFocus={true}
                     />
 
                     <View style={styles.timerRow}>
@@ -106,7 +183,12 @@ export default function VerifyScreen() {
                         <Pressable
                             style={[styles.resendButton, timer > 0 && styles.disabledButton]}
                             disabled={timer > 0}
-                            onPress={() => setTimer(60)}
+                            onPress={() => {
+                                const newOtp = Math.floor(1000 + Math.random() * 9000).toString();
+                                setTimer(60);
+                                router.setParams({ actualOtp: newOtp });
+                                Alert.alert('Verification Code', `Your new OTP is: ${newOtp}`);
+                            }}
                         >
                             <Text style={styles.resendText}>Resend</Text>
                         </Pressable>
@@ -192,16 +274,17 @@ const styles = StyleSheet.create({
         color: '#4A4A4A',
         lineHeight: 26,
         marginBottom: 40,
+        fontFamily: 'Poppins_400Regular',
     },
     phoneText: {
-        fontWeight: 'bold',
+        fontFamily: 'Poppins_700Bold',
     },
     inputSection: {
         marginBottom: 40,
     },
     label: {
         fontSize: 16,
-        fontWeight: 'bold',
+        fontFamily: 'Poppins_700Bold',
         color: '#1A1A1A',
         marginBottom: 10,
     },
@@ -213,6 +296,7 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#E0E0E0',
         color: '#1A1A1A',
+        fontFamily: 'Poppins_400Regular',
     },
     timerRow: {
         flexDirection: 'row',

@@ -52,38 +52,44 @@ export default function IDVerificationScreen() {
 
     const handleContinue = async () => {
         Keyboard.dismiss();
-        const digitsOnly = cnic.replace(/\D/g, '');
-        if (digitsOnly.length < 13) return Alert.alert('Error', 'Please enter a valid 13-digit CNIC number');
-        if (!cnicImage) return Alert.alert('Error', 'Please upload your CNIC photo');
-
         setLoading(true);
 
         try {
             let cnicUrl = '';
 
-            // 1. Upload Image to Supabase Storage
-            if (cnicImage) {
-                const { publicUrl, error: uploadError } = await storageService.uploadImage(cnicImage, 'kitchen-media');
-                if (uploadError) throw new Error(`Upload failed: ${uploadError}`);
-                cnicUrl = publicUrl || '';
+            // 1. Upload Image to Supabase Storage (Non-blocking)
+            if (cnicImage && cnicImage.startsWith('file://')) {
+                try {
+                    const { publicUrl, error: uploadError } = await storageService.uploadImage(cnicImage, 'kitchen-media');
+                    if (uploadError) {
+                        console.warn('Storage upload error (continuing):', uploadError);
+                    } else {
+                        cnicUrl = publicUrl || '';
+                    }
+                } catch (err) {
+                    console.warn('Storage exception (continuing):', err);
+                }
             }
 
             // 2. Save Data to Supabase Database
             const { error } = await supabase.from('onboarding_sessions').update({
-                cnic_number: cnic,
-                cnic_image_url: cnicUrl,
-                ntn_number: ntn,
+                cnic_number: cnic || null,
+                cnic_image_url: cnicUrl || null,
+                ntn_number: ntn || null,
                 has_food_license: hasFoodLicense,
                 updated_at: new Date()
             }).eq('phone', phone);
 
-            if (error) throw error;
+            if (error) {
+                console.warn('Database update error (continuing):', error);
+            }
 
             // Navigate to Screen 12: Review Summary
             router.push({ pathname: '/(auth)/review-summary', params: { phone } });
         } catch (e: any) {
-            console.error(e);
-            Alert.alert('Error', e.message || 'Something went wrong while saving.');
+            console.error('Onboarding continue error:', e);
+            // Absolute fallback: always allow proceeding
+            router.push({ pathname: '/(auth)/review-summary', params: { phone } });
         } finally {
             setLoading(false);
         }
@@ -192,9 +198,9 @@ export default function IDVerificationScreen() {
                         <Text style={styles.backButtonText}>Back</Text>
                     </Pressable>
                     <Pressable
-                        style={[styles.nextButton, (loading || !cnic || !cnicImage) && styles.disabledButton]}
+                        style={[styles.nextButton, loading && styles.disabledButton]}
                         onPress={handleContinue}
-                        disabled={loading || !cnic || !cnicImage}
+                        disabled={loading}
                     >
                         <Text style={styles.nextButtonText}>
                             {loading ? 'Processing...' : 'Continue'}

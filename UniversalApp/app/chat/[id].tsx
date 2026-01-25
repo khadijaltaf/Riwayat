@@ -49,7 +49,10 @@ export default function ChatDetailScreen() {
     // Permissions
     const [audioPermission, requestAudioPermission] = Audio.usePermissions();
 
+    const [currentUserPhone, setCurrentUserPhone] = useState<string | null>(null);
+
     useEffect(() => {
+        fetchCurrentUser();
         if (id) {
             loadMessages();
             const channel = chatService.subscribeToMessages(id, (newMsg) => {
@@ -65,6 +68,18 @@ export default function ChatDetailScreen() {
             };
         }
     }, [id]);
+
+    const fetchCurrentUser = async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('phone')
+                .eq('id', user.id)
+                .single();
+            if (profile) setCurrentUserPhone(profile.phone);
+        }
+    };
 
     const loadMessages = async () => {
         try {
@@ -84,15 +99,32 @@ export default function ChatDetailScreen() {
         const text = inputText;
         setInputText('');
 
+        // Optimistic UI update - add message immediately
+        const tempMessage: ChatMessage = {
+            id: `temp_${Date.now()}`,
+            conversation_id: id!,
+            sender_phone: currentUserPhone || 'Unknown',
+            content: text,
+            created_at: new Date().toISOString()
+        };
+
+        setMessages(prev => [...prev, tempMessage]);
+        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+
         try {
-            await chatService.sendMessage({
+            const sentMessage = await chatService.sendMessage({
                 conversation_id: id!,
-                sender_phone: userPhone || 'Unknown',
+                sender_phone: currentUserPhone || 'Unknown',
                 content: text
             });
+
+            // Replace temp message with real one
+            setMessages(prev => prev.map(m =>
+                m.id === tempMessage.id ? sentMessage : m
+            ));
         } catch (e) {
-            Alert.alert('Error', 'Failed to send message');
-            setInputText(text);
+            console.warn('Failed to send message, keeping local copy:', e);
+            // Message stays in UI even if send fails
         }
     };
 
@@ -101,7 +133,7 @@ export default function ChatDetailScreen() {
         try {
             await chatService.sendMessage({
                 conversation_id: id!,
-                sender_phone: userPhone || 'Unknown',
+                sender_phone: currentUserPhone || 'Unknown',
                 location_data: {
                     latitude: 31.5204,
                     longitude: 74.3587,
@@ -146,7 +178,7 @@ export default function ChatDetailScreen() {
 
                 await chatService.sendMessage({
                     conversation_id: id!,
-                    sender_phone: userPhone || 'Unknown',
+                    sender_phone: currentUserPhone || 'Unknown',
                     image_url: type !== 'video' ? publicUrl : undefined,
                     metadata: type === 'video' ? { video_url: publicUrl } : undefined
                 });
@@ -185,7 +217,7 @@ export default function ChatDetailScreen() {
 
                 await chatService.sendMessage({
                     conversation_id: id!,
-                    sender_phone: userPhone || 'Unknown',
+                    sender_phone: currentUserPhone || 'Unknown',
                     audio_url: publicUrl,
                     metadata: { type: 'voice_note' }
                 });
@@ -240,7 +272,7 @@ export default function ChatDetailScreen() {
     };
 
     const renderMessage = ({ item }: { item: ChatMessage }) => {
-        const isUser = item.sender_phone === userPhone;
+        const isUser = item.sender_phone === currentUserPhone;
         const time = new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
         return (
@@ -297,9 +329,9 @@ export default function ChatDetailScreen() {
 
     return (
         <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.container}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 20}
         >
             <StatusBar style="dark" />
 

@@ -4,6 +4,9 @@ import { StyleSheet, View, Text, Pressable, ScrollView, Image, FlatList, Alert, 
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
+import * as ImagePicker from 'expo-image-picker';
+import { storageService } from '@/services/storage-service';
+import { supabase } from '@/lib/supabase';
 
 const TABS = ['Logo', 'Banners', 'Audios', 'Videos', 'Images'];
 
@@ -43,11 +46,37 @@ const MOCK_GALLERY = Array(12).fill(0).map((_, i) => ({
 
 export default function KitchenMediaScreen() {
     const router = useRouter();
-    const [activeTab, setActiveTab] = useState('Images'); // Default as per one screenshot, or Logo
+    const [activeTab, setActiveTab] = useState('Images');
+    const [uploading, setUploading] = useState(false);
     const { width } = useWindowDimensions();
 
-    const handleUpload = () => {
-        Alert.alert("Upload", `Trigger upload for ${activeTab}`);
+    const handleUpload = async () => {
+        try {
+            const mediaType = activeTab === 'Videos' ? ImagePicker.MediaTypeOptions.Videos : ImagePicker.MediaTypeOptions.Images;
+
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: mediaType,
+                allowsEditing: true,
+                quality: 0.8,
+            });
+
+            if (result.canceled || !result.assets[0].uri) return;
+
+            setUploading(true);
+            const uri = result.assets[0].uri;
+            const contentType = activeTab === 'Videos' ? 'video/mp4' : 'image/jpeg';
+
+            const { publicUrl, error } = await storageService.uploadFile(uri, 'kitchen-media', contentType);
+
+            if (error) throw new Error(error);
+
+            Alert.alert("Success", `${activeTab} uploaded successfully!`);
+
+        } catch (e: any) {
+            Alert.alert("Upload Error", e.message || "Failed to upload file");
+        } finally {
+            setUploading(false);
+        }
     };
 
     const renderContent = () => {
@@ -185,10 +214,15 @@ export default function KitchenMediaScreen() {
 
             <ScrollView contentContainerStyle={styles.content}>
 
-                {/* Upload Button */}
                 <View style={styles.uploadRow}>
-                    <Pressable style={styles.uploadBtn} onPress={handleUpload}>
-                        <Text style={styles.uploadBtnText}>Upload</Text>
+                    <Pressable
+                        style={[styles.uploadBtn, uploading && styles.disabledButton]}
+                        onPress={handleUpload}
+                        disabled={uploading}
+                    >
+                        <Text style={styles.uploadBtnText}>
+                            {uploading ? 'Uploading...' : 'Upload'}
+                        </Text>
                     </Pressable>
                 </View>
 
@@ -351,6 +385,9 @@ const styles = StyleSheet.create({
         fontFamily: 'Poppins_400Regular',
         color: '#1A1A1A',
         lineHeight: 20,
+    },
+    disabledButton: {
+        opacity: 0.5,
     },
     noteLabel: {
         color: '#FF5722', // Orange

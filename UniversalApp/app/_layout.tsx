@@ -7,6 +7,7 @@ import { useEffect } from 'react';
 import {
   useFonts,
   Poppins_400Regular,
+  Poppins_500Medium,
   Poppins_600SemiBold,
   Poppins_700Bold,
 } from '@expo-google-fonts/poppins';
@@ -22,6 +23,7 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
   const [loaded, error] = useFonts({
     Poppins_400Regular,
+    Poppins_500Medium,
     Poppins_600SemiBold,
     Poppins_700Bold,
   });
@@ -44,7 +46,6 @@ export default function RootLayout() {
             <Stack.Screen name="index" />
             <Stack.Screen name="welcome" />
             <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="(auth)" />
           </Stack>
           <StatusBar style="auto" />
         </ThemeProvider>

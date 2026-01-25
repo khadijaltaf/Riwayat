@@ -3,6 +3,8 @@ import React, { useState } from 'react';
 import { StyleSheet, View, Text, ScrollView, Pressable, TextInput, Image, Switch, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
+import { useRouter } from 'expo-router';
+import { supabase } from '@/lib/supabase';
 
 const { width } = Dimensions.get('window');
 
@@ -38,6 +40,28 @@ const DISHES = [
 
 export default function MenuScreen() {
   const [search, setSearch] = useState('');
+  const [ownerName, setOwnerName] = useState('Partner');
+  const [kitchenName, setKitchenName] = useState('My Kitchen');
+  const router = useRouter();
+
+  React.useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  const fetchProfile = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase.from('profiles').select('owner_name').eq('id', user.id).single();
+        if (profile?.owner_name) setOwnerName(profile.owner_name);
+
+        const { data: kitchen } = await supabase.from('kitchens').select('name').eq('owner_id', user.id).single();
+        if (kitchen?.name) setKitchenName(kitchen.name);
+      }
+    } catch (e) {
+      console.warn('Error fetching profile in Menu', e);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -47,8 +71,8 @@ export default function MenuScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.greetingText}>Hello,</Text>
-            <Text style={styles.kitchenNameText}>Ananya's Kitchen</Text>
+            <Text style={styles.greetingText}>Hello, {ownerName}</Text>
+            <Text style={styles.kitchenNameText}>{kitchenName}</Text>
           </View>
           <Pressable style={styles.notificationButton}>
             <Ionicons name="notifications" size={24} color="#FF8A65" />
