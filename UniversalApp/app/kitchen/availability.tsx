@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet as RNStyleSheet, View, Text, Switch, Pressable, ScrollView, Modal, TextInput, Keyboard, ActivityIndicator, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import { api } from '@/lib/api-client';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { supabase } from '@/lib/supabase';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Keyboard, Modal, Pressable, StyleSheet as RNStyleSheet, ScrollView, Switch, Text, View } from 'react-native';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -49,13 +49,9 @@ export default function AvailabilityScreen() {
 
     const fetchSchedule = async () => {
         try {
-            const { data: { user } } = await supabase.auth.getUser();
+            const { data: { user } } = await api.auth.getUser();
             if (user) {
-                const { data: kitchen } = await supabase
-                    .from('kitchens')
-                    .select('schedule')
-                    .eq('owner_id', user.id)
-                    .single();
+                const { data: kitchen } = await api.kitchen.get(user.id);
 
                 if (kitchen?.schedule) {
                     setSchedule(kitchen.schedule as DaySchedule[]);
@@ -70,15 +66,11 @@ export default function AvailabilityScreen() {
 
     const saveSchedule = async () => {
         try {
-            const { data: { user } } = await supabase.auth.getUser();
+            const { data: { user } } = await api.auth.getUser();
             if (user) {
-                const { error } = await supabase
-                    .from('kitchens')
-                    .update({
-                        schedule: schedule,
-                        updated_at: new Date()
-                    })
-                    .eq('owner_id', user.id);
+                const { error } = await api.kitchen.update(user.id, {
+                    schedule: schedule
+                });
 
                 if (error) throw error;
             }

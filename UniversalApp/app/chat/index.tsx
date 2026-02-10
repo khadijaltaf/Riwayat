@@ -1,11 +1,9 @@
-
-import React from 'react';
-import { StyleSheet, View, Text, FlatList, Pressable, Image, TextInput, SafeAreaView, Platform, StatusBar as RNStatusBar } from 'react-native';
-import { useRouter } from 'expo-router';
+import { api } from '@/lib/api-client';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { supabase } from '@/lib/supabase';
-import { chatService } from '@/lib/chat-service';
+import React from 'react';
+import { FlatList, Platform, Pressable, StatusBar as RNStatusBar, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
 // Mock Data matching screenshot
 const MOCK_CHATS = [
@@ -66,23 +64,21 @@ export default function ChatListScreen() {
 
     const fetchChats = async () => {
         try {
-            const { data: { user } } = await supabase.auth.getUser();
+            const { data: { user } } = await api.auth.getUser();
             if (!user) return; // Handle auth redirect if needed
 
             // We need the user's phone to find conversations
             // Assuming phone is stored in metadata or we can get it from profile
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('phone')
-                .eq('id', user.id)
-                .single();
+            const { data: profile } = await api.profile.get(user.id);
 
             if (profile?.phone) {
-                const data = await chatService.getConversations(profile.phone);
+                const { data, error } = await api.chat.getConversations(profile.phone);
+                if (error) throw error;
+
                 // Map to UI format
                 // In a real app we'd fetch the OTHER participant's name/avatar here too
                 // For now, we'll format what we have
-                const formatted = data.map((c: any) => {
+                const formatted = (data || []).map((c: any) => {
                     const otherPhone = c.participant_1 === profile.phone ? c.participant_2 : c.participant_1;
                     return {
                         id: c.id,

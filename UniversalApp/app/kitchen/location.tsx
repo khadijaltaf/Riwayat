@@ -1,11 +1,10 @@
-
-import React, { useState } from 'react';
-import { StyleSheet, View, Text, TextInput, Pressable, ScrollView, Modal, KeyboardAvoidingView, Platform, Keyboard, ActivityIndicator, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import { api } from '@/lib/api-client';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import React, { useState } from 'react';
+import { ActivityIndicator, Alert, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { supabase } from '@/lib/supabase';
 
 export default function KitchenAddressScreen() {
     const router = useRouter();
@@ -25,13 +24,9 @@ export default function KitchenAddressScreen() {
 
     const fetchLocationData = async () => {
         try {
-            const { data: { user } } = await supabase.auth.getUser();
+            const { data: { user } } = await api.auth.getUser();
             if (user) {
-                const { data: kitchen } = await supabase
-                    .from('kitchens')
-                    .select('address, city, area')
-                    .eq('owner_id', user.id)
-                    .single();
+                const { data: kitchen } = await api.kitchen.get(user.id);
 
                 if (kitchen) {
                     setFullAddress(kitchen.address || '');
@@ -51,17 +46,13 @@ export default function KitchenAddressScreen() {
     const handleConfirm = async () => {
         Keyboard.dismiss();
         try {
-            const { data: { user } } = await supabase.auth.getUser();
+            const { data: { user } } = await api.auth.getUser();
             if (user) {
-                const { error } = await supabase
-                    .from('kitchens')
-                    .update({
-                        address: fullAddress,
-                        city: city,
-                        area: cityZone,
-                        updated_at: new Date()
-                    })
-                    .eq('owner_id', user.id);
+                const { error } = await api.kitchen.update(user.id, {
+                    address: fullAddress,
+                    city: city,
+                    area: cityZone
+                });
 
                 if (error) throw error;
             }

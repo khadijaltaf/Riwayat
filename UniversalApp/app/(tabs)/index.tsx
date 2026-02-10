@@ -1,13 +1,12 @@
 
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, ScrollView, Pressable, Switch, Dimensions, Image, RefreshControl } from 'react-native';
+import { api } from '@/lib/api-client';
 import { Ionicons } from '@expo/vector-icons';
-import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { supabase } from '@/lib/supabase';
+import { StatusBar } from 'expo-status-bar';
+import React, { useEffect, useState } from 'react';
+import { Dimensions, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
-import { authMock } from '@/services/auth-mock';
 
 const { width } = Dimensions.get('window');
 
@@ -26,15 +25,11 @@ export default function DashboardScreen() {
 
   const fetchProfile = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } } = await api.auth.getUser();
 
       if (user) {
         // Fetch Profile
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('owner_name, avatar_url')
-          .eq('id', user.id)
-          .single();
+        const { data: profile } = await api.profile.get(user.id);
 
         if (profile?.owner_name) {
           setOwnerName(profile.owner_name);
@@ -44,22 +39,17 @@ export default function DashboardScreen() {
         if (profile?.avatar_url) setAvatarUrl(profile.avatar_url);
 
         // Fetch Kitchen
-        const { data: kitchen } = await supabase
-          .from('kitchens')
-          .select('name, is_online, total_sales, total_orders')
-          .eq('owner_id', user.id)
-          .single();
+        const { data: kitchen } = await api.kitchen.get(user.id);
 
         if (kitchen) {
           setKitchenName(kitchen.name);
-          setIsOnline(kitchen.is_online || false);
+          setIsOnline(kitchen.status === 'ACTIVE');
           setTotalSales(kitchen.total_sales?.toString() || '0');
           setTotalOrders(kitchen.total_orders?.toString() || '0');
         }
       } else {
-        // Fallback or redirect to login? 
-        // For now, let's keep default or maybe redirect
-        // router.replace('/(auth)/login-otp');
+        // Fallback or redirect
+        // router.replace('/(auth)/login');
       }
     } catch (e) {
       console.log('Error fetching profile', e);
@@ -80,6 +70,8 @@ export default function DashboardScreen() {
       router.push('/chat' as any);
     } else if (label === 'Feedback') {
       router.push('/feedback' as any);
+    } else if (label === 'view earnings') {
+      router.push('/earnings' as any);
     } else if (label === 'view orders') {
       router.push('/(tabs)/orders');
     } else {
@@ -142,7 +134,7 @@ export default function DashboardScreen() {
                 <Ionicons name="logo-usd" size={16} color="#FFFFFF" />
               </View>
               <Text style={styles.statLabel}>Total Sales</Text>
-              <Text style={styles.statValue}>${totalSales}</Text>
+              <Text style={styles.statValue}>{`$${totalSales}`}</Text>
             </View>
             <View style={styles.statCard}>
               <View style={styles.statIconBadge}>

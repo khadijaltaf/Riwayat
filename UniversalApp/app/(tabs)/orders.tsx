@@ -1,24 +1,21 @@
 
-import React, { useState } from 'react';
-import { StyleSheet, View, Text, ScrollView, Pressable, TextInput, Dimensions } from 'react-native';
+import { api } from '@/lib/api-client';
 import { Ionicons } from '@expo/vector-icons';
-import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
-import { supabase } from '@/lib/supabase';
+import { StatusBar } from 'expo-status-bar';
+import React, { useState } from 'react';
+import { Dimensions, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 const { width } = Dimensions.get('window');
 
-const ORDERS = [
-    { id: 'ORD001', customer: 'Rajesh Kumar', items: '3 items', location: 'Sarabha Nagar', price: '$450', status: 'New', time: '2 mins ago' },
-    { id: 'ORD001', customer: 'Rajesh Kumar', items: '3 items', location: 'Sarabha Nagar', price: '$450', status: 'Canceled', time: '2 mins ago' },
-    { id: 'ORD001', customer: 'Rajesh Kumar', items: '3 items', location: 'Sarabha Nagar', price: '$450', status: 'Pending', time: '2 mins ago' },
-    { id: 'ORD001', customer: 'Rajesh Kumar', items: '3 items', location: 'Sarabha Nagar', price: '$450', status: 'New', time: '2 mins ago' },
-];
+
+
 
 export default function OrdersScreen() {
     const [activeTab, setActiveTab] = useState('All');
     const [ownerName, setOwnerName] = useState('Partner');
     const [kitchenName, setKitchenName] = useState('My Kitchen');
+    const [orders, setOrders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const router = useRouter();
 
@@ -26,16 +23,26 @@ export default function OrdersScreen() {
 
     React.useEffect(() => {
         fetchProfile();
+        fetchOrders();
     }, []);
+
+    const fetchOrders = async () => {
+        try {
+            const { data } = await api.orders.list();
+            if (data) setOrders(data);
+        } catch (e) {
+            console.warn('Error fetching orders:', e);
+        }
+    };
 
     const fetchProfile = async () => {
         try {
-            const { data: { user } } = await supabase.auth.getUser();
+            const { data: { user } } = await api.auth.getUser();
             if (user) {
-                const { data: profile } = await supabase.from('profiles').select('owner_name').eq('id', user.id).single();
+                const { data: profile } = await api.profile.get(user.id);
                 if (profile?.owner_name) setOwnerName(profile.owner_name);
 
-                const { data: kitchen } = await supabase.from('kitchens').select('name').eq('owner_id', user.id).single();
+                const { data: kitchen } = await api.kitchen.get(user.id);
                 if (kitchen?.name) setKitchenName(kitchen.name);
             }
         } catch (e) {
@@ -47,9 +54,15 @@ export default function OrdersScreen() {
 
     const getStatusColor = (status: string) => {
         switch (status) {
-            case 'New': return '#5C1414';
-            case 'Canceled': return '#D32F2F';
-            case 'Pending': return '#D48806';
+            case 'New':
+            case 'PENDING': return '#5C1414';
+            case 'Canceled':
+            case 'CANCELLED': return '#D32F2F';
+            case 'Pending':
+            case 'ACCEPTED':
+            case 'PREPARING': return '#D48806';
+            case 'READY':
+            case 'COMPLETED': return '#2E7D32';
             default: return '#5C1414';
         }
     };
@@ -113,7 +126,7 @@ export default function OrdersScreen() {
 
                 {/* Order List */}
                 <View style={styles.orderList}>
-                    {ORDERS.filter(o => activeTab === 'All' || o.status === activeTab).map((order, idx) => (
+                    {orders.filter(o => activeTab === 'All' || o.status === activeTab.toUpperCase() || o.status === activeTab).map((order, idx) => (
                         <View key={`${order.id}-${idx}`} style={styles.orderCard}>
                             <View style={styles.orderCardHeader}>
                                 <Text style={styles.orderId}>{order.id}</Text>
@@ -121,14 +134,14 @@ export default function OrdersScreen() {
                                     <Text style={styles.statusText}>{order.status}</Text>
                                 </View>
                             </View>
-                            <Text style={styles.customerName}>{order.customer}</Text>
+                            <Text style={styles.customerName}>{order.customer_name || order.customer}</Text>
 
                             <View style={styles.orderDetailsRow}>
-                                <Text style={styles.orderSummary}>{order.items} • {order.location}</Text>
-                                <Text style={styles.orderPrice}>{order.price}</Text>
+                                <Text style={styles.orderSummary}>{order.items?.length || '3'} items • {order.location || 'Sarabha Nagar'}</Text>
+                                <Text style={styles.orderPrice}>${order.total || order.price}</Text>
                             </View>
 
-                            <Text style={styles.orderTime}>{order.time}</Text>
+                            <Text style={styles.orderTime}>{order.time || '2 mins ago'}</Text>
                         </View>
                     ))}
                 </View>

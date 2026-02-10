@@ -1,13 +1,12 @@
-
-import React, { useState } from 'react';
-import { StyleSheet, View, TextInput, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView, Keyboard, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { StatusBar } from 'expo-status-bar';
 import OTPInput from '@/components/OTPInput';
-import { supabase } from '@/lib/supabase';
-import { useLocalSearchParams } from 'expo-router';
+import { api } from '@/lib/api-client';
+import { localStorageService } from '@/services/local-storage-service';
+import { Ionicons } from '@expo/vector-icons';
 import * as ExpoCrypto from 'expo-crypto';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import React, { useState } from 'react';
+import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 export default function PinSetupScreen() {
     const { phone } = useLocalSearchParams<{ phone: string }>();
@@ -32,14 +31,22 @@ export default function PinSetupScreen() {
                 pin
             );
 
-            const { error } = await supabase.from('onboarding_sessions').update({
+            // Save step progress locally
+            await localStorageService.saveOnboardingProgress({
+                phone: phone,
+                step: 'owner_details',
+                temp_pin_hash: hashedPin
+            });
+
+            const { error } = await api.onboarding.updateSession({
+                phone,
                 temp_pin_hash: hashedPin,
                 step: 'owner_details',
-                updated_at: new Date()
-            }).eq('phone', phone);
+                updated_at: new Date().toISOString()
+            });
 
             if (error) {
-                console.warn('Supabase save error:', error);
+                console.warn('API save error:', error);
                 // Optionally handle error (e.g., retry or show alert) but we proceed for now
             }
 
@@ -63,7 +70,6 @@ export default function PinSetupScreen() {
             <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
                 {/* Header */}
                 <View style={styles.header}>
-                    <Text style={styles.stepText}>2/6</Text>
                     <View style={styles.iconContainer}>
                         <Ionicons name="lock-closed" size={24} color="#600E10" />
                     </View>

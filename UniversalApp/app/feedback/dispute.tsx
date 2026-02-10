@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, Text, Pressable, TextInput, Alert, Keyboard, ActivityIndicator } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { StatusBar } from 'expo-status-bar';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { supabase } from '@/lib/supabase';
 import ActionSuccessModal from '@/components/ActionSuccessModal';
+import { api } from '@/lib/api-client';
+import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import React, { useState } from 'react';
+import { ActivityIndicator, Alert, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const THEME = {
     primary: '#600E10',
@@ -28,16 +28,16 @@ export default function RaiseDisputeScreen() {
 
         setLoading(true);
         try {
-            const { error } = await supabase.from('disputes').insert([{
+            const { error } = await api.feedback.createDispute({
                 feedback_id: id,
                 reason,
                 explanation
-            }]);
+            });
 
             if (error) throw error;
 
             // Update feedback status
-            await supabase.from('feedbacks').update({ status: 'DISPUTED' }).eq('id', id);
+            await api.feedback.updateStatus(id as string, 'DISPUTED');
 
             setShowSuccess(true);
         } catch (e) {

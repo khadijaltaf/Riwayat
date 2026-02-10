@@ -1,61 +1,47 @@
-
-import React, { useState } from 'react';
-import { StyleSheet, View, Text, ScrollView, Pressable, TextInput, Image, Switch, Dimensions } from 'react-native';
+import { api } from '@/lib/api-client';
 import { Ionicons } from '@expo/vector-icons';
-import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
-import { supabase } from '@/lib/supabase';
+import { StatusBar } from 'expo-status-bar';
+import React, { useState } from 'react';
+import { Dimensions, Image, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
 const { width } = Dimensions.get('window');
 
-const DISHES = [
-  {
-    id: '1',
-    name: 'Butter Chicken',
-    category: 'Main Course',
-    price: '280',
-    orders: '45',
-    image: 'https://images.unsplash.com/photo-1603894584202-938269b3e153?w=400',
-    available: true,
-  },
-  {
-    id: '2',
-    name: 'Butter Chicken',
-    category: 'Main Course',
-    price: '280',
-    orders: '45',
-    image: 'https://images.unsplash.com/photo-1603894584202-938269b3e153?w=400',
-    available: true,
-  },
-  {
-    id: '3',
-    name: 'Butter Chicken',
-    category: 'Main Course',
-    price: '280',
-    orders: '45',
-    image: 'https://images.unsplash.com/photo-1603894584202-938269b3e153?w=400',
-    available: true,
-  },
-];
+
+
 
 export default function MenuScreen() {
   const [search, setSearch] = useState('');
   const [ownerName, setOwnerName] = useState('Partner');
   const [kitchenName, setKitchenName] = useState('My Kitchen');
+  const [dishes, setDishes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   React.useEffect(() => {
     fetchProfile();
+    fetchDishes();
   }, []);
+
+  const fetchDishes = async () => {
+    try {
+      const { data } = await api.dishes.list();
+      if (data) setDishes(data);
+    } catch (e) {
+      console.warn('Error fetching dishes:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchProfile = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } } = await api.auth.getUser();
       if (user) {
-        const { data: profile } = await supabase.from('profiles').select('owner_name').eq('id', user.id).single();
+        const { data: profile } = await api.profile.get(user.id);
         if (profile?.owner_name) setOwnerName(profile.owner_name);
 
-        const { data: kitchen } = await supabase.from('kitchens').select('name').eq('owner_id', user.id).single();
+        const { data: kitchen } = await api.kitchen.get(user.id);
         if (kitchen?.name) setKitchenName(kitchen.name);
       }
     } catch (e) {
@@ -114,10 +100,10 @@ export default function MenuScreen() {
 
         {/* Dishes List */}
         <View style={styles.dishesList}>
-          {DISHES.map((dish) => (
+          {dishes.filter(d => d.name.toLowerCase().includes(search.toLowerCase())).map((dish) => (
             <View key={dish.id} style={styles.dishCard}>
               <View style={styles.dishMainInfo}>
-                <Image source={{ uri: dish.image }} style={styles.dishImage} />
+                <Image source={{ uri: dish.image_url || 'https://via.placeholder.com/80' }} style={styles.dishImage} />
                 <View style={styles.dishTextContent}>
                   <View style={styles.dishHeader}>
                     <Text style={styles.dishName}>{dish.name}</Text>
@@ -125,14 +111,14 @@ export default function MenuScreen() {
                       <Ionicons name="ellipsis-vertical" size={20} color="#B0B0B0" />
                     </Pressable>
                   </View>
-                  <Text style={styles.dishCategory}>{dish.category}</Text>
+                  <Text style={styles.dishCategory}>{dish.category || 'Main Course'}</Text>
 
                   <View style={styles.availabilityRow}>
                     <Text style={styles.dishPrice}>${dish.price}</Text>
                     <View style={styles.toggleRow}>
-                      <Text style={styles.dishOrders}>{dish.orders} orders</Text>
+                      <Text style={styles.dishOrders}>{dish.orders || '0'} orders</Text>
                       <Switch
-                        value={dish.available}
+                        value={dish.is_available ?? dish.available}
                         trackColor={{ false: '#E0E0E0', true: '#4CD964' }}
                         thumbColor="#FFFFFF"
                         onValueChange={() => { }}

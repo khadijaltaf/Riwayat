@@ -1,10 +1,9 @@
-
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, ScrollView, Pressable, Image, Platform } from 'react-native';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api-client';
 import { Ionicons } from '@expo/vector-icons';
-import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import React, { useEffect, useState } from 'react';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 const KITCHEN_MENU_ITEMS = [
     {
@@ -85,13 +84,13 @@ export default function KitchenScreen() {
 
     const fetchProfile = async () => {
         try {
-            const { data: { user } } = await supabase.auth.getUser();
+            const { data: { user } } = await api.auth.getUser();
             if (user) {
-                const { data: profile } = await supabase.from('profiles').select('owner_name, avatar_url').eq('id', user.id).single();
+                const { data: profile } = await api.profile.get(user.id);
                 if (profile?.owner_name) setOwnerName(profile.owner_name);
                 if (profile?.avatar_url) setAvatarUrl(profile.avatar_url);
 
-                const { data: kitchen } = await supabase.from('kitchens').select('name').eq('owner_id', user.id).single();
+                const { data: kitchen } = await api.kitchen.get(user.id);
                 if (kitchen?.name) setKitchenName(kitchen.name);
             }
         } catch (e) {
@@ -101,7 +100,7 @@ export default function KitchenScreen() {
 
     const handleLogout = async () => {
         try {
-            await supabase.auth.signOut();
+            await api.auth.signOut();
             router.replace('/(auth)/login');
         } catch (e) {
             console.error('Logout failed', e);

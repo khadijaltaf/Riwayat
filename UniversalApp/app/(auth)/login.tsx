@@ -1,11 +1,10 @@
-
-import React, { useState } from 'react';
-import { StyleSheet, View, TextInput, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView, Alert, Keyboard, Image } from 'react-native';
-import { useRouter } from 'expo-router';
+import { api } from '@/lib/api-client';
+import { localStorageService } from '@/services/local-storage-service';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { supabase } from '@/lib/supabase';
-import * as ExpoCrypto from 'expo-crypto';
+import React, { useState } from 'react';
+import { Alert, Image, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 export default function LoginScreen() {
     const [phone, setPhone] = useState('+92');
@@ -14,6 +13,18 @@ export default function LoginScreen() {
     const [loading, setLoading] = useState(false);
     const router = useRouter();
 
+    React.useEffect(() => {
+        loadRememberedPhone();
+    }, []);
+
+    const loadRememberedPhone = async () => {
+        const savedPhone = await localStorageService.getRememberedPhone();
+        if (savedPhone) {
+            setPhone(savedPhone);
+            setRememberMe(true);
+        }
+    };
+
     const handleLogin = async () => {
         Keyboard.dismiss();
         if (!phone || !pin) return Alert.alert('Error', 'Please enter both phone number and PIN');
@@ -21,54 +32,45 @@ export default function LoginScreen() {
         setLoading(true);
 
         try {
-            // Normalize phone number to match database format (+92...)
+            // Normalize phone number (optional, depending on how strict we want to be)
             const formattedPhone = phone.startsWith('0')
                 ? '+92' + phone.substring(1).replace(/\s/g, '')
                 : phone.startsWith('+92')
                     ? phone.replace(/\s/g, '')
                     : '+92' + phone.replace(/\s/g, '');
 
-            // 1. Fetch user profile to get the PIN hash
-            const { data: profile, error: fetchError } = await supabase
-                .from('profiles')
-                .select('pin_hash')
-                .eq('phone', formattedPhone)
-                .single();
-
-            if (fetchError || !profile) {
-                setLoading(false);
-                return Alert.alert('Login Failed', 'User not found. Please register first.');
-            }
-
-            // 2. Hash the entered PIN
-            const hashedPin = await ExpoCrypto.digestStringAsync(
-                ExpoCrypto.CryptoDigestAlgorithm.SHA256,
+            const { data, error } = await api.auth.loginWithPin({
+                phone: formattedPhone,
                 pin
-            );
-
-            // 3. Verify PIN
-            // Note: In a real app, use bcrypt.compare on server-side (RPC)
-            if (hashedPin !== profile.pin_hash && pin !== '0000') { // 0000 backdoor for testing if needed
-                setLoading(false);
-                return Alert.alert('Login Failed', 'Invalid PIN');
-            }
-
-            // 4. Verification Successful - Perform Auth Login
-            // We use the fixed password strategy for this Mock Auth setup
-            const cleanPhone = phone.replace(/\D/g, '');
-            const email = `${cleanPhone}@riwayat.app`;
-            const password = 'riwayat123456';
-
-            const { error: authError } = await supabase.auth.signInWithPassword({
-                email,
-                password
             });
 
-            if (authError) {
-                // If auth fails (e.g. user deleted from Auth but not Profiles), might need to handle gracefully
-                // For now, we assume if profile exists, auth user "should" exist or we might need to recreate it.
-                // But let's just show the error.
-                throw authError;
+            if (error || !data?.session) {
+                // Check if user exists but has no PIN
+                const { data: profile } = await api.profile.getByPhone(formattedPhone);
+                if (profile && !profile.pin_hash) {
+                    Alert.alert(
+                        'PIN Required',
+                        'You have not set a PIN yet. Please set one now.',
+                        [
+                            {
+                                text: 'Set PIN',
+                                onPress: () => router.push({ pathname: '/(auth)/forgot-pin', params: { phone: formattedPhone } })
+                            },
+                            { text: 'Cancel', style: 'cancel' }
+                        ]
+                    );
+                    setLoading(false);
+                    return;
+                }
+
+                throw new Error(error?.message || 'Login failed');
+            }
+
+            // Save phone if Remember Me is checked
+            if (rememberMe) {
+                await localStorageService.saveRememberedPhone(phone);
+            } else {
+                await localStorageService.clearRememberedPhone();
             }
 
             setLoading(false);
@@ -78,8 +80,6 @@ export default function LoginScreen() {
             setLoading(false);
             Alert.alert('Login Failed', e.message || 'An unexpected error occurred');
         }
-
-
     };
 
     return (

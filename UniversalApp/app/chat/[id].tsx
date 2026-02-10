@@ -1,16 +1,16 @@
 
-import React, { useState, useRef, useEffect } from 'react';
-import { StyleSheet, View, Text, FlatList, Pressable, TextInput, Image, KeyboardAvoidingView, Platform, Alert, Linking, ActionSheetIOS, ScrollView, Modal, TouchableOpacity, ActivityIndicator, Keyboard } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { StatusBar } from 'expo-status-bar';
-import * as ImagePicker from 'expo-image-picker';
 import { Audio } from 'expo-av';
+import * as ImagePicker from 'expo-image-picker';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActionSheetIOS, ActivityIndicator, Alert, FlatList, Image, Keyboard, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { chatService, ChatMessage } from '@/lib/chat-service';
+import { api } from '@/lib/api-client';
+import { ChatMessage, chatService } from '@/lib/chat-service';
 import { storageService } from '@/services/storage-service';
-import { supabase } from '@/lib/supabase';
 
 // UI Theme Colors
 const THEME = {
@@ -64,19 +64,15 @@ export default function ChatDetailScreen() {
                 setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
             });
             return () => {
-                supabase.removeChannel(channel);
+                channel.unsubscribe();
             };
         }
     }, [id]);
 
     const fetchCurrentUser = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: { user } } = await api.auth.getUser();
         if (user) {
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('phone')
-                .eq('id', user.id)
-                .single();
+            const { data: profile } = await api.profile.get(user.id);
             if (profile) setCurrentUserPhone(profile.phone);
         }
     };
@@ -173,13 +169,13 @@ export default function ChatDetailScreen() {
         if (!result.canceled) {
             const asset = result.assets[0];
             try {
-                const { publicUrl, error } = await storageService.uploadImage(asset.uri, 'chat-media');
+                const { publicUrl, error } = await storageService.uploadFile(asset.uri, 'chat-media');
                 if (error) throw new Error(error);
 
                 await chatService.sendMessage({
                     conversation_id: id!,
                     sender_phone: currentUserPhone || 'Unknown',
-                    image_url: type !== 'video' ? publicUrl : undefined,
+                    image_url: type !== 'video' ? (publicUrl || undefined) : undefined,
                     metadata: type === 'video' ? { video_url: publicUrl } : undefined
                 });
             } catch (e) {
@@ -212,13 +208,13 @@ export default function ChatDetailScreen() {
 
         if (uri) {
             try {
-                const { publicUrl, error } = await storageService.uploadImage(uri, 'chat-media');
+                const { publicUrl, error } = await storageService.uploadFile(uri, 'chat-media');
                 if (error) throw new Error(error);
 
                 await chatService.sendMessage({
                     conversation_id: id!,
                     sender_phone: currentUserPhone || 'Unknown',
-                    audio_url: publicUrl,
+                    audio_url: publicUrl || undefined,
                     metadata: { type: 'voice_note' }
                 });
             } catch (e) {
@@ -289,13 +285,13 @@ export default function ChatDetailScreen() {
                     {item.location_data && (
                         <TouchableOpacity
                             style={styles.locationContainer}
-                            onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${item.location_data.latitude},${item.location_data.longitude}`)}
+                            onPress={() => item.location_data && Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${item.location_data.latitude},${item.location_data.longitude}`)}
                         >
                             <View style={styles.locationHeader}>
                                 <Ionicons name="location" size={20} color={isUser ? '#FFF' : '#600E10'} />
                                 <Text style={[styles.locationTitle, isUser && { color: '#FFF' }]}>Shared Location</Text>
                             </View>
-                            <Text style={[styles.locationAddress, isUser && { color: '#EEE' }]}>{item.location_data.address}</Text>
+                            <Text style={[styles.locationAddress, isUser && { color: '#EEE' }]}>{item.location_data?.address}</Text>
                         </TouchableOpacity>
                     )}
 

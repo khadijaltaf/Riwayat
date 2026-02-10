@@ -1,16 +1,6 @@
-import { supabase } from './supabase';
+import { api, ChatMessage } from '@/lib/api-client';
 
-export interface ChatMessage {
-    id: string;
-    conversation_id: string;
-    sender_phone: string;
-    content?: string;
-    image_url?: string;
-    audio_url?: string;
-    location_data?: any;
-    metadata?: any;
-    created_at: string;
-}
+export type { ChatMessage };
 
 export const chatService = {
     /**
@@ -18,16 +8,12 @@ export const chatService = {
      */
     async getMessages(conversationId: string) {
         try {
-            const { data, error } = await supabase
-                .from('messages')
-                .select('*')
-                .eq('conversation_id', conversationId)
-                .order('created_at', { ascending: true });
+            const { data, error } = await api.chat.getMessages(conversationId);
 
             if (error) throw error;
             return data as ChatMessage[];
         } catch (e) {
-            console.warn('Failed to fetch messages from database, returning empty array:', e);
+            console.warn('Failed to fetch messages from API, returning empty array:', e);
             // Return empty array so UI doesn't crash
             return [];
         }
@@ -38,25 +24,14 @@ export const chatService = {
      */
     async sendMessage(msg: Partial<ChatMessage>) {
         try {
-            const { data, error } = await supabase
-                .from('messages')
-                .insert([msg])
-                .select();
+            const { data, error } = await api.chat.sendMessage(msg);
 
             if (error) throw error;
 
-            // Also update the conversation's last message and timestamp
-            await supabase
-                .from('conversations')
-                .update({
-                    last_message: msg.content || 'Media attachment',
-                    updated_at: new Date()
-                })
-                .eq('id', msg.conversation_id);
-
+            // In our mock, data is an array
             return data[0] as ChatMessage;
         } catch (e) {
-            console.warn('Real-time message send failed, using local mock:', e);
+            console.warn('Message send failed, using local mock:', e);
             // Return a mock message object so the UI can update
             return {
                 id: Math.random().toString(),
@@ -65,7 +40,6 @@ export const chatService = {
                 content: msg.content,
                 image_url: msg.image_url,
                 audio_url: msg.audio_url,
-                location_data: msg.location_data,
                 created_at: new Date().toISOString()
             } as ChatMessage;
         }
@@ -73,21 +47,16 @@ export const chatService = {
 
     /**
      * Subscribe to new messages in real-time
+     * (Mock implementation)
      */
     subscribeToMessages(conversationId: string, onNewMessage: (payload: any) => void) {
-        return supabase
-            .channel(`chat:${conversationId}`)
-            .on(
-                'postgres_changes',
-                {
-                    event: 'INSERT',
-                    schema: 'public',
-                    table: 'messages',
-                    filter: `conversation_id=eq.${conversationId}`
-                },
-                (payload: any) => onNewMessage(payload.new)
-            )
-            .subscribe();
+        console.log(`[Mock] Subscribed to chat:${conversationId}`);
+        // Mock subscription object
+        return {
+            unsubscribe: () => {
+                console.log(`[Mock] Unsubscribed from chat:${conversationId}`);
+            }
+        };
     },
 
     /**
@@ -95,11 +64,7 @@ export const chatService = {
      */
     async getConversations(userPhone: string) {
         try {
-            const { data, error } = await supabase
-                .from('conversations')
-                .select('*')
-                .or(`participant_1.eq.${userPhone},participant_2.eq.${userPhone}`)
-                .order('updated_at', { ascending: false });
+            const { data, error } = await api.chat.getConversations(userPhone);
 
             if (error) throw error;
             return data;
@@ -114,27 +79,12 @@ export const chatService = {
      */
     async getOrCreateConversation(p1: string, p2: string) {
         try {
-            // Try to find existing
-            const { data: existing, error: findError } = await supabase
-                .from('conversations')
-                .select('*')
-                .or(`and(participant_1.eq.${p1},participant_2.eq.${p2}),and(participant_1.eq.${p2},participant_2.eq.${p1})`)
-                .maybeSingle();
+            const { data, error } = await api.chat.getOrCreateConversation(p1, p2);
 
-            if (existing) return existing.id;
-
-            // Create new if not found
-            const { data: created, error: createError } = await supabase
-                .from('conversations')
-                .insert([{ participant_1: p1, participant_2: p2 }])
-                .select()
-                .single();
-
-            if (createError) throw createError;
-            return created.id;
+            if (error) throw error;
+            return data.id;
         } catch (e) {
             console.warn('Failed to get/create conversation, using mock ID:', e);
-            // Return a deterministic mock ID based on participants
             return `mock_${p1}_${p2}`;
         }
     }

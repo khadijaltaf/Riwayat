@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, ScrollView, Pressable, TextInput, Image, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
+import { api } from '@/lib/api-client';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { supabase } from '@/lib/supabase';
 
 // UI Theme Colors
 const THEME = {
@@ -33,17 +33,17 @@ export default function FeedbackListScreen() {
     const fetchFeedbacks = async () => {
         setLoading(true);
         try {
-            let query = supabase.from('feedbacks').select('*').order('created_at', { ascending: false });
+            const { data, error } = await api.feedback.list();
+            if (error) throw error;
 
+            let filtered = data || [];
             if (activeTab === 'Pending') {
-                query = query.eq('status', 'PENDING');
+                filtered = filtered.filter(f => f.status === 'PENDING');
             } else if (activeTab === 'Publish') {
-                query = query.eq('status', 'PUBLISHED');
+                filtered = filtered.filter(f => f.status === 'PUBLISHED');
             }
 
-            const { data, error } = await query;
-            if (error) throw error;
-            setFeedbacks(data || []);
+            setFeedbacks(filtered);
         } catch (e) {
             console.error('Error fetching feedbacks:', e);
             // Mock data if table doesn't exist yet or for demo

@@ -1,11 +1,11 @@
 
-import React, { useState } from 'react';
-import { StyleSheet, View, Text, TextInput, Pressable, KeyboardAvoidingView, Platform, ScrollView, Alert, Keyboard, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { StatusBar } from 'expo-status-bar';
 import CustomModal from '@/components/CustomModal';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api-client';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import React, { useState } from 'react';
+import { ActivityIndicator, Alert, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 export default function KitchenDetailsScreen() {
     const [ownerName, setOwnerName] = useState('');
@@ -22,17 +22,13 @@ export default function KitchenDetailsScreen() {
 
     const fetchKitchenData = async () => {
         try {
-            const { data: { user } } = await supabase.auth.getUser();
+            const { data: { user } } = await api.auth.getUser();
             if (user) {
                 // Fetch Profile
-                const { data: profile } = await supabase.from('profiles').select('owner_name').eq('id', user.id).single();
+                const { data: profile } = await api.profile.get(user.id);
                 if (profile?.owner_name) setOwnerName(profile.owner_name);
 
-                const { data: kitchen } = await supabase
-                    .from('kitchens')
-                    .select('name, description, banner_image_url') // description is bio/tagline
-                    .eq('owner_id', user.id)
-                    .single();
+                const { data: kitchen } = await api.kitchen.get(user.id);
 
                 if (kitchen) {
                     setName(kitchen.name || '');
@@ -54,22 +50,17 @@ export default function KitchenDetailsScreen() {
 
     const handleFinalSubmit = async () => {
         try {
-            const { data: { user } } = await supabase.auth.getUser();
+            const { data: { user } } = await api.auth.getUser();
             if (user) {
                 // Update Profile
-                await supabase.from('profiles').update({
-                    owner_name: ownerName,
-                    updated_at: new Date()
-                }).eq('id', user.id);
+                await api.profile.update(user.id, {
+                    owner_name: ownerName
+                });
 
-                const { error } = await supabase
-                    .from('kitchens')
-                    .update({
-                        name: name,
-                        description: bio,
-                        updated_at: new Date()
-                    })
-                    .eq('owner_id', user.id);
+                const { error } = await api.kitchen.update(user.id, {
+                    name: name,
+                    description: bio,
+                });
 
                 if (error) throw error;
             }

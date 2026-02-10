@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, TextInput, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView, Alert, Keyboard, Image } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { StatusBar } from 'expo-status-bar';
 import OTPInput from '@/components/OTPInput';
-import { supabase } from '@/lib/supabase';
-import { authMock } from '@/services/auth-mock';
+import { api } from '@/lib/api-client';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import React, { useState } from 'react';
+import { Alert, Image, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 export default function LoginOTPScreen() {
     const [phone, setPhone] = useState('');
@@ -47,48 +46,30 @@ export default function LoginOTPScreen() {
         setLoading(true);
 
         try {
-            // V4 Strategy: Strict strict sanitization
-            const cleanPhone = phone.replace(/\D/g, '');
-            const email = `${cleanPhone}@riwayat.app`;
-            const password = 'riwayat123456';
+            // Verify OTP via API
+            const { data, error } = await api.auth.verifyOtp({ phone, token: otp });
 
-            // Try to Sign In with Email/Password
-            const { data: { session, user }, error } = await supabase.auth.signInWithPassword({
-                email,
-                password
-            });
-
-            if (error) {
+            if (error || !data?.user) {
                 setLoading(false);
-                // Better error message
-                return Alert.alert('Login Failed', `Could not log in: ${error.message} (Is this your first time? Please Register first)`);
+                return Alert.alert('Login Failed', error?.message || 'Verification failed');
             }
 
-            if (user) {
-                // Check if profile exists
-                const { data: profile } = await supabase
-                    .from('profiles')
-                    .select('*')
-                    .eq('id', user.id)
-                    .single();
+            // Check if profile exists
+            const { data: profile } = await api.profile.get(data.user.id);
 
-                if (profile) {
-                    setLoading(false);
-                    router.replace('/(tabs)');
-                } else {
-                    setLoading(false);
-                    Alert.alert(
-                        'Profile Not Found',
-                        'It seems you have not completed registration yet.',
-                        [
-                            { text: 'Cancel', style: 'cancel' },
-                            { text: 'Register', onPress: () => router.push('/(auth)/register' as any) }
-                        ]
-                    );
-                }
+            if (profile) {
+                setLoading(false);
+                router.replace('/(tabs)');
             } else {
                 setLoading(false);
-                Alert.alert('Error', 'Login failed. Please try again.');
+                Alert.alert(
+                    'Profile Not Found',
+                    'It seems you have not completed registration yet.',
+                    [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Register', onPress: () => router.push('/(auth)/register' as any) }
+                    ]
+                );
             }
 
         } catch (e: any) {

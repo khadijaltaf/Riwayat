@@ -1,14 +1,26 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, TextInput, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView, Keyboard, Alert, Image, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
+import { api } from '@/lib/api-client';
+import { localStorageService } from '@/services/local-storage-service';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { supabase } from '@/lib/supabase';
+import React, { useState } from 'react';
+import { ActivityIndicator, Alert, Image, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 export default function RegisterScreen() {
     const [phone, setPhone] = useState('');
     const [loading, setLoading] = useState(false);
     const router = useRouter();
+
+    React.useEffect(() => {
+        loadProgress();
+    }, []);
+
+    const loadProgress = async () => {
+        const progress = await localStorageService.getOnboardingProgress();
+        if (progress?.phone) {
+            setPhone(progress.phone.replace('+92', ''));
+        }
+    };
 
     const handleSendVerification = async () => {
         Keyboard.dismiss();
@@ -28,13 +40,19 @@ export default function RegisterScreen() {
         const cleanPhone = phone.trim();
 
         try {
-            // 2. Save OTP to Supabase Onboarding Session
-            const { error } = await supabase.from('onboarding_sessions').upsert({
+            // 2. Save to Local Storage for Persistence
+            await localStorageService.saveOnboardingProgress({
+                phone: formattedPhone,
+                step: 'verify'
+            });
+
+            // 2. Save OTP to Mock Onboarding Session
+            const { error } = await api.onboarding.updateSession({
                 phone: formattedPhone,
                 last_otp: generatedOtp,
                 step: 'verify',
-                updated_at: new Date()
-            }, { onConflict: 'phone' });
+                updated_at: new Date().toISOString()
+            });
 
             if (error) throw error;
 
@@ -68,7 +86,6 @@ export default function RegisterScreen() {
             <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
                 {/* Header with Phone Icon and Step */}
                 <View style={styles.header}>
-                    <Text style={styles.stepText}>1/6</Text>
                     <View style={styles.phoneIconContainer}>
                         <Ionicons name="call" size={24} color="#600E10" />
                     </View>

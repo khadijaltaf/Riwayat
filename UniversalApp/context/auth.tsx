@@ -1,7 +1,6 @@
 
+import { api, Session, User } from '@/lib/api-client';
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Session, User } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabase';
 
 type AuthContextType = {
     session: Session | null;
@@ -29,39 +28,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            setSession(session);
-            setUser(session?.user ?? null);
-            setIsLoading(false);
-        });
-
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            setSession(session);
-            setUser(session?.user ?? null);
-            setIsLoading(false);
-        });
-
-        return () => subscription.unsubscribe();
+        checkSession();
     }, []);
 
+    const checkSession = async () => {
+        try {
+            const { data } = await api.auth.getSession();
+            if (data.session) {
+                setSession(data.session);
+                setUser(data.session.user);
+            }
+        } catch (error) {
+            console.error('Session check failed', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const signInWithOTP = async (phone: string) => {
-        const { error } = await supabase.auth.signInWithOtp({
-            phone,
-        });
+        const { error } = await api.auth.signInWithOtp({ phone });
         return { error };
     };
 
     const verifyOTP = async (phone: string, token: string) => {
-        const { data, error } = await supabase.auth.verifyOtp({
-            phone,
-            token,
-            type: 'sms',
-        });
-        return { session: data.session, error };
+        const { data, error } = await api.auth.verifyOtp({ phone, token });
+        if (data?.session) {
+            setSession(data.session);
+            setUser(data.session.user);
+        }
+        return { session: data?.session, error };
     };
 
     const signOut = async () => {
-        await supabase.auth.signOut();
+        await api.auth.signOut();
+        setSession(null);
+        setUser(null);
     };
 
     return (

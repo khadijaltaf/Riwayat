@@ -1,12 +1,12 @@
 
-import React, { useState } from 'react';
-import { StyleSheet, View, Text, Pressable, ScrollView, Image, FlatList, Alert, useWindowDimensions } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { StatusBar } from 'expo-status-bar';
-import * as ImagePicker from 'expo-image-picker';
 import { storageService } from '@/services/storage-service';
-import { supabase } from '@/lib/supabase';
+import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import React, { useState } from 'react';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+
 
 const TABS = ['Logo', 'Banners', 'Audios', 'Videos', 'Images'];
 

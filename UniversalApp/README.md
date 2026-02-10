@@ -1,79 +1,84 @@
-# Riwayat - Heritage on a Plate 🍛
+# Riwayat — Heritage on a Plate 🍛
 
-**Riwayat** is a premium home-cooked food delivery application designed to connect authentic home chefs with food lovers. The app features a stunning, high-end "Red & White" aesthetic and provides a seamless experience for both partners and customers.
+Welcome to **Riwayat**, a project born out of a love for authentic, home-cooked flavors. We believe that the best meals aren't found in restaurants, but in the kitchens of home chefs who cook with heart and tradition.
 
-## ✨ Features
+Riwayat is designed to be the bridge between these talented chefs and people who crave a real taste of home. This app is the "Partner" side of that bridge—giving chefs the tools they need to manage their kitchen, showcase their signature dishes, and connect with their community.
 
-### 📱 Dashboard & Interface
-*   **Premium UI/UX:** A modern, clean design using a curated "Riwayat Red" (#600E10) and White palette.
-*   **Dynamic Dashboard:**
-    *   **Kitchen Status:** One-tap online/offline switch with gradient card styling.
-    *   **Quick Actions:** 2x3 Grid layout for fast access to key features (Menu, Orders, Earnings, etc.).
-    *   **Recent Updates:** Carousel view of the latest platform news.
+---
 
-### 💬 Advanced Chat System
-*   **WhatsApp-Style Messaging:** Real-time feel with bubble UI.
-*   **Rich Media:**
-    *   📸 Image Sharing (Gallery/Camera).
-    *   🎙️ Voice Notes (Recording & Playback with waveforms).
-    *   📞 One-tap calling (In-app routing or System dialer).
-*   **Smart Interactions:** Quick reply chips and status indicators.
+## ✨ What makes Riwayat special?
 
-### 📝 Partner Registration
-*   **6-Step Flow:** Comprehensive onboarding including Personal Info, Kitchen Setup, Menu Creation, and Pricing.
-*   **Validation:** Smart input masking for Phone numbers (`03XX-XXXXXXX`) and CNIC.
-*   **Bypass Mode:** Dev features to test flows without backend dependencies.
+We didn't just build an app; we built an experience. We wanted something that felt premium, warm, and deeply rooted in culture.
 
-## 🛠️ Tech Stack
-*   **Framework:** React Native (Expo SDK 52)
-*   **Routing:** Expo Router (File-based routing)
-*   **Styling:** StyleSheet & Custom Design System (Popping Fonts)
-*   **Icons:** Ionicons
-*   **Audio/Media:** `expo-av`, `expo-image-picker`
+### 🎨 A Rich, Premium Aesthetic
+The app uses a curated palette we call **"Riwayat Red" (#600E10)** paired with clean whites. It’s a design that feels both traditional and modern.
 
-## 🚀 Getting Started
+### 🚀 A Dashboard for busy Chefs
+*   **Kitchen Control:** A simple, beautiful toggle to go online or offline.
+*   **Quick access:** A 2x3 grid that puts everything (Menu, Orders, Earnings) just one tap away.
+*   **Real-time Updates:** A carousel to keep chefs in the loop with what's happening in the Riwayat community.
 
-### Prerequisites
-*   Node.js & npm/yarn
-*   Expo Go app on your phone
+### 💬 Connecting through Conversation
+Food is personal, so our chat system is too.
+*   **WhatsApp-style ease:** Simple, real-time messaging.
+*   **Voice and Vision:** Send voice notes to explain a recipe detail or a photo of a fresh dish ready for delivery.
+*   **Direct Dial:** Sometimes a quick call is better. We’ve integrated one-tap calling for seamless coordination.
+
+### 📝 Seamless Onboarding
+Becoming a partner is a journey. Our 6-step registration flow guides chefs through setting up their profile, kitchen details, and their very first menu without feeling overwhelmed.
+
+---
+
+## 🛠️ The Tech Behind the Taste
+
+We chose tools that let us build fast and stay flexible:
+
+*   **Core:** React Native with Expo (SDK 54).
+*   **Navigation:** Expo Router for that smooth, native feel.
+*   **Design:** Custom styles with Poppins typography for that modern touch.
+*   **Media:** Integrated audio and image handling for a rich chat experience.
+
+---
+
+## 🚀 Jump In
 
 ### Installation
 
-1.  **Clone the repository**
+1.  **Clone the spirit:**
     ```bash
     git clone https://github.com/yourusername/riwayat-app.git
     cd riwayat-app
     ```
 
-2.  **Install dependencies**
+2.  **Get the ingredients (dependencies):**
     ```bash
     npm install
     ```
 
-3.  **Start the app**
+3.  **Fire up the kitchen:**
     ```bash
-    npx expo start --tunnel
+    npx expo start
     ```
 
-## 🔑 Test Credentials (Mock Auth)
+### Testing it out
 
-Use these credentials to log in during development:
+We've built in some **Test Credentials** so you can see the app in action immediately:
 
 | Role | Phone | PIN |
-|------|-------|-----|
+|:---|:---|:---|
 | **Test Chef** | `03001122334` | `1234` |
 | **Chef Ahmad** | `03330000000` | `1234` |
 
-## 📦 Building for Android
+---
 
-To generate a release APK:
+## 📦 Creating the APK
 
-```bash
-npx expo prebuild
-cd android
-./gradlew assembleRelease
-```
-The APK will be located in `android/app/build/outputs/apk/release/app-release.apk`.
+If you want to hold the app in your hands, you can generate a build:
+
+1.  **Preparation:** `npx expo prebuild`
+2.  **Standard Build:** Use `eas build -p android --profile preview` for a cloud-based APK.
+3.  **Local Alternative:** Run `./gradlew assembleRelease` inside the `android` folder.
 
 ---
-*Built with ❤️ for Riwayat*
+
+*Built with ❤️ and a lot of tea, for the love of food.*

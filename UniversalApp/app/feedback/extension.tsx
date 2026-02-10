@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, Text, Pressable, TextInput, Alert, Keyboard, ActivityIndicator } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { StatusBar } from 'expo-status-bar';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { supabase } from '@/lib/supabase';
 import ActionSuccessModal from '@/components/ActionSuccessModal';
+import { api } from '@/lib/api-client';
+import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import React, { useState } from 'react';
+import { ActivityIndicator, Alert, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const THEME = {
     primary: '#600E10',
@@ -28,11 +28,11 @@ export default function RequestExtensionScreen() {
 
         setLoading(true);
         try {
-            const { error } = await supabase.from('time_extensions').insert([{
+            const { error } = await api.feedback.createExtension({
                 feedback_id: id,
                 extra_time: extraTime,
                 reason
-            }]);
+            });
 
             if (error) throw error;
 

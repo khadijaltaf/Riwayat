@@ -1,12 +1,11 @@
-
-import React, { useState } from 'react';
-import { StyleSheet, View, TextInput, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView, Alert, Keyboard, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { StatusBar } from 'expo-status-bar';
 import SelectionBottomSheet from '@/components/SelectionBottomSheet';
-import { supabase } from '@/lib/supabase';
-import { useLocalSearchParams } from 'expo-router';
+import { api } from '@/lib/api-client';
+import { localStorageService } from '@/services/local-storage-service';
+import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import React, { useState } from 'react';
+import { ActivityIndicator, Alert, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 export default function OwnerDetailsScreen() {
     const { phone } = useLocalSearchParams<{ phone: string }>();
@@ -17,6 +16,18 @@ export default function OwnerDetailsScreen() {
     const [showSelection, setShowSelection] = useState(false);
     const [loading, setLoading] = useState(false);
     const router = useRouter();
+
+    React.useEffect(() => {
+        loadProgress();
+    }, []);
+
+    const loadProgress = async () => {
+        const progress = await localStorageService.getOnboardingProgress();
+        if (progress?.full_name) setName(progress.full_name);
+        if (progress?.owner_email) setEmail(progress.owner_email);
+        if (progress?.is_agent !== undefined) setIsAgent(progress.is_agent);
+        if (progress?.relationship) setRelationship(progress.relationship);
+    };
 
     const relationships = ['Family Member', 'Employee', 'Partner', 'Friend', 'Other'];
 
@@ -29,18 +40,28 @@ export default function OwnerDetailsScreen() {
         if (!name) return Alert.alert('Error', 'Please enter the owner name');
         if (isAgent && !relationship) return Alert.alert('Error', 'Please select your relationship');
 
-        // Final save to Supabase
+        // Final save to local storage & Supabase
         setLoading(true);
         try {
-            const { error } = await supabase.from('onboarding_sessions').update({
+            await localStorageService.saveOnboardingProgress({
+                phone,
+                full_name: name,
+                owner_email: email,
+                is_agent: isAgent,
+                relationship: isAgent ? relationship : null,
+                step: 'kitchen_details'
+            });
+
+            const { error } = await api.onboarding.updateSession({
+                phone,
                 full_name: name,
                 owner_email: email,
                 is_agent: isAgent,
                 relationship: isAgent ? relationship : null,
                 step: 'kitchen_details',
-                updated_at: new Date()
-            }).eq('phone', phone);
-            if (error) console.warn('Supabase save error:', error);
+                updated_at: new Date().toISOString()
+            });
+            if (error) console.warn('API save error:', error);
         } catch (e) {
             console.error(e);
         } finally {
@@ -61,7 +82,7 @@ export default function OwnerDetailsScreen() {
             <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
                 {/* Header */}
                 <View style={styles.header}>
-                    <Text style={styles.stepText}>3/6</Text>
+                    <Text style={styles.stepText}>1/6</Text>
                     <View style={styles.iconContainer}>
                         <Ionicons name="person" size={24} color="#600E10" />
                     </View>

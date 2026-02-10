@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView, Image, ActivityIndicator, Alert, Keyboard } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { api } from '@/lib/api-client';
+import { localStorageService } from '@/services/local-storage-service';
 import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { supabase } from '@/lib/supabase';
-import { authMock } from '@/services/auth-mock';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Image, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 export default function ReviewSummaryScreen() {
     const { phone } = useLocalSearchParams<{ phone: string }>();
@@ -19,14 +19,17 @@ export default function ReviewSummaryScreen() {
 
     const fetchSessionData = async () => {
         try {
-            const { data: session, error } = await supabase
-                .from('onboarding_sessions')
-                .select('*')
-                .eq('phone', phone)
-                .single();
-
-            if (error) throw error;
-            setData(session);
+            // Priority 1: Local Storage
+            const progress = await localStorageService.getOnboardingProgress();
+            if (Object.keys(progress).length > 0) {
+                setData(progress);
+            } else {
+                const userPhone = phone || (await localStorageService.getOnboardingProgress())?.phone || '';
+                const { data: session } = await api.onboarding.getSession(userPhone);
+                if (session) {
+                    setData((prev: any) => ({ ...prev, ...session }));
+                }
+            }
         } catch (e) {
             console.error('Error fetching session:', e);
         } finally {
@@ -39,13 +42,14 @@ export default function ReviewSummaryScreen() {
         setSubmitting(true);
         try {
             // Updated session status
-            await supabase.from('onboarding_sessions').update({
+            await api.onboarding.updateSession({
+                phone,
                 application_status: 'SUBMITTED',
-                updated_at: new Date()
-            }).eq('phone', phone);
+                updated_at: new Date().toISOString()
+            });
 
             // Get current user (should be logged in from verify step)
-            const { data: { user } } = await supabase.auth.getUser();
+            const { data: { user } } = await api.auth.getUser();
 
             if (!user) throw new Error('User not authenticated');
 
@@ -57,34 +61,35 @@ export default function ReviewSummaryScreen() {
                     ? rawPhone.replace(/\s/g, '')
                     : '+92' + rawPhone.replace(/\s/g, '');
 
-            const { error: profileError } = await supabase.from('profiles').upsert({
-                id: user.id,
+            const { error: profileError } = await api.profile.update(user.id, {
                 phone: formattedPhone,
                 pin_hash: data?.temp_pin_hash || '0000',
                 owner_name: data?.full_name || 'Partner',
                 email: data?.owner_email || data?.email,
                 role: 'OWNER',
-                updated_at: new Date()
-            }, { onConflict: 'id' });
+                updated_at: new Date().toISOString()
+            });
 
             if (profileError) {
                 throw profileError;
             }
 
             // Upsert Kitchen
-            const { error: kitchenError } = await supabase.from('kitchens').upsert({
+            const { error: kitchenError } = await api.kitchen.update(user.id, {
                 owner_id: user.id,
                 name: data?.kitchen_name || 'My Kitchen',
-                description: data?.kitchen_tagline,
+                description: data?.kitchen_tagline || '',
                 banner_image_url: data?.kitchen_banner_url,
                 address: data?.address,
                 city: data?.city,
                 area: data?.area,
-                is_online: true,
-                updated_at: new Date()
-            }, { onConflict: 'owner_id' });
+                status: 'ACTIVE' // Mock as active for now
+            });
 
             if (kitchenError) throw kitchenError;
+
+            // 4. Clear Onboarding Progress from Local Storage
+            await localStorageService.clearOnboardingProgress();
 
             // Navigate to final screen (replace history so they can't go back)
             router.replace('/(auth)/onboarding-complete');

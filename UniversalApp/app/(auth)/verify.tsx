@@ -1,12 +1,12 @@
-
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, TextInput, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView, Keyboard, Alert } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { StatusBar } from 'expo-status-bar';
 import CustomModal from '@/components/CustomModal';
 import OTPInput from '@/components/OTPInput';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api-client';
+import { localStorageService } from '@/services/local-storage-service';
+import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import React, { useEffect, useState } from 'react';
+import { Alert, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 export default function VerifyScreen() {
     const { phone, actualOtp } = useLocalSearchParams<{ phone: string; actualOtp: string }>();
@@ -40,14 +40,10 @@ export default function VerifyScreen() {
 
         let otpToVerify = actualOtp;
 
-        // If actualOtp is missing (e.g. reload), fetch from Supabase
+        // If actualOtp is missing (e.g. reload), fetch from API
         if (!otpToVerify) {
             try {
-                const { data: session } = await supabase
-                    .from('onboarding_sessions')
-                    .select('last_otp')
-                    .eq('phone', phone)
-                    .single();
+                const { data: session } = await api.onboarding.getSession(phone);
                 if (session?.last_otp) {
                     otpToVerify = session.last_otp;
                 }
@@ -65,53 +61,32 @@ export default function VerifyScreen() {
         setLoading(true);
 
         try {
-            // "Mock" Auth: V4 Strategy (Emergency Fix)
-            // 1. Sanitize phone completely (remove all non-digits)
-            const cleanPhone = phone.replace(/\D/g, '');
-            const email = `${cleanPhone}@riwayat.app`;
-            const password = 'riwayat123456';
-
-            // 2. Try to Sign Up first
-            const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-                email,
-                password,
+            // Save step progress locally
+            await localStorageService.saveOnboardingProgress({
+                phone: phone,
+                step: 'pin-setup'
             });
 
-            let user = signUpData.user;
+            // "Mock" Auth: V4 Strategy (Emergency Fix)
+            // 2. Try to Sign Up/In with OTP (Simulate)
+            const { data: authData, error: authError } = await api.auth.verifyOtp({ phone, token: otp });
 
-            if (signUpError) {
-                // ONLY try to sign in if the error is "User already registered"
-                if (signUpError.message && (signUpError.message.toLowerCase().includes("registered") || signUpError.message.toLowerCase().includes("exists"))) {
-                    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-                        email,
-                        password
-                    });
+            let user = authData?.user;
 
-                    if (signInError) {
-                        // Real error (e.g. invalid credentials despite V4 - should be impossible)
-                        throw new Error(`Login failed after exists: ${signInError.message}`);
-                    }
-                    user = signInData.user || user;
-                } else {
-                    // Other error (e.g. Rate Limit)
-                    throw new Error(`Registration failed: ${signUpError.message}`);
-                }
+            if (authError || !user) {
+                throw new Error(authError?.message || 'Authentication failed');
             }
 
             if (user) {
                 // Check if user already has a profile 
-                const { data: profile } = await supabase
-                    .from('profiles')
-                    .select('*')
-                    .eq('id', user.id)
-                    .single();
+                const { data: profile } = await api.profile.get(user.id);
 
                 // UPSERT session
-                await supabase.from('onboarding_sessions').upsert({
+                await api.onboarding.updateSession({
                     phone: phone,
                     last_otp: otp,
-                    updated_at: new Date()
-                }, { onConflict: 'phone' });
+                    updated_at: new Date().toISOString()
+                });
 
                 if (profile) {
                     if (phone === '03337659240' || phone === '03001234567') {

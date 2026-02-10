@@ -1,11 +1,10 @@
-
-import React, { useState } from 'react';
-import { StyleSheet, View, Text, TextInput, Pressable, ScrollView, Image, KeyboardAvoidingView, Platform, Keyboard, Modal, ActivityIndicator, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import { api } from '@/lib/api-client';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import React, { useState } from 'react';
+import { ActivityIndicator, Alert, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { supabase } from '@/lib/supabase';
 
 export default function ChefStoryScreen() {
     const router = useRouter();
@@ -21,23 +20,15 @@ export default function ChefStoryScreen() {
 
     const fetchStory = async () => {
         try {
-            const { data: { user } } = await supabase.auth.getUser();
+            const { data: { user } } = await api.auth.getUser();
             if (user) {
                 // Fetch Owner Name from profile
-                const { data: profile } = await supabase
-                    .from('profiles')
-                    .select('owner_name')
-                    .eq('id', user.id)
-                    .single();
+                const { data: profile } = await api.profile.get(user.id);
 
                 if (profile?.owner_name) setChefName(profile.owner_name);
 
                 // Fetch Story Details from kitchen
-                const { data: kitchen } = await supabase
-                    .from('kitchens')
-                    .select('chef_bio, chef_journey')
-                    .eq('owner_id', user.id)
-                    .single();
+                const { data: kitchen } = await api.kitchen.get(user.id);
 
                 if (kitchen) {
                     setChefBio(kitchen.chef_bio || "");
@@ -53,16 +44,12 @@ export default function ChefStoryScreen() {
 
     const handleSave = async () => {
         try {
-            const { data: { user } } = await supabase.auth.getUser();
+            const { data: { user } } = await api.auth.getUser();
             if (user) {
-                const { error } = await supabase
-                    .from('kitchens')
-                    .update({
-                        chef_bio: chefBio,
-                        chef_journey: chefJourney,
-                        updated_at: new Date()
-                    })
-                    .eq('owner_id', user.id);
+                const { error } = await api.kitchen.update(user.id, {
+                    chef_bio: chefBio,
+                    chef_journey: chefJourney
+                });
 
                 if (error) throw error;
             }

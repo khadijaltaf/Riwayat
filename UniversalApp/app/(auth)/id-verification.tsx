@@ -1,12 +1,12 @@
-
-import React, { useState } from 'react';
-import { StyleSheet, View, TextInput, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView, Alert, Image, Keyboard } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { StatusBar } from 'expo-status-bar';
-import * as ImagePicker from 'expo-image-picker';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api-client';
+import { localStorageService } from '@/services/local-storage-service';
 import { storageService } from '@/services/storage-service';
+import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import React, { useState } from 'react';
+import { Image, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 export default function IDVerificationScreen() {
     const [cnic, setCnic] = useState('');
@@ -16,6 +16,18 @@ export default function IDVerificationScreen() {
     const [loading, setLoading] = useState(false);
     const { phone } = useLocalSearchParams<{ phone: string }>();
     const router = useRouter();
+
+    React.useEffect(() => {
+        loadProgress();
+    }, []);
+
+    const loadProgress = async () => {
+        const progress = await localStorageService.getOnboardingProgress();
+        if (progress?.cnic_number) setCnic(progress.cnic_number);
+        if (progress?.ntn_number) setNtn(progress.ntn_number);
+        if (progress?.has_food_license !== undefined) setHasFoodLicense(progress.has_food_license);
+        if (progress?.cnic_image_url) setCnicImage(progress.cnic_image_url);
+    };
 
     const pickImage = async () => {
         Keyboard.dismiss();
@@ -60,7 +72,7 @@ export default function IDVerificationScreen() {
             // 1. Upload Image to Supabase Storage (Non-blocking)
             if (cnicImage && cnicImage.startsWith('file://')) {
                 try {
-                    const { publicUrl, error: uploadError } = await storageService.uploadImage(cnicImage, 'kitchen-media');
+                    const { publicUrl, error: uploadError } = await storageService.uploadFile(cnicImage, 'kitchen-media');
                     if (uploadError) {
                         console.warn('Storage upload error (continuing):', uploadError);
                     } else {
@@ -71,14 +83,25 @@ export default function IDVerificationScreen() {
                 }
             }
 
-            // 2. Save Data to Supabase Database
-            const { error } = await supabase.from('onboarding_sessions').update({
+            // 2. Save Data to Local Storage & API
+            await localStorageService.saveOnboardingProgress({
+                phone,
                 cnic_number: cnic || null,
-                cnic_image_url: cnicUrl || null,
+                cnic_image_url: cnicUrl || cnicImage || null,
                 ntn_number: ntn || null,
                 has_food_license: hasFoodLicense,
-                updated_at: new Date()
-            }).eq('phone', phone);
+                step: 'review_summary'
+            });
+
+            const { error } = await api.onboarding.updateSession({
+                phone,
+                cnic_number: cnic || null,
+                cnic_image_url: cnicUrl || cnicImage || null,
+                ntn_number: ntn || null,
+                has_food_license: hasFoodLicense,
+                step: 'review_summary',
+                updated_at: new Date().toISOString()
+            });
 
             if (error) {
                 console.warn('Database update error (continuing):', error);

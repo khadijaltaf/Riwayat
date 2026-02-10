@@ -1,10 +1,10 @@
-
-import React, { useState } from 'react';
-import { StyleSheet, View, TextInput, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView, Alert, Keyboard, ActivityIndicator } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { api } from '@/lib/api-client';
+import { localStorageService } from '@/services/local-storage-service';
 import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { supabase } from '@/lib/supabase';
+import React, { useState } from 'react';
+import { ActivityIndicator, Alert, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 export default function LocationScreen() {
     const { phone } = useLocalSearchParams<{ phone: string }>();
@@ -21,12 +21,22 @@ export default function LocationScreen() {
 
     const fetchLocationData = async () => {
         try {
-            const { data: session } = await supabase.from('onboarding_sessions').select('address, city, area, map_link').eq('phone', phone).single();
-            if (session) {
-                if (session.address) setAddress(session.address);
-                if (session.city) setCity(session.city);
-                if (session.area) setArea(session.area);
-                if (session.map_link) setMapLink(session.map_link);
+            // Priority 1: Local Storage
+            const progress = await localStorageService.getOnboardingProgress();
+            if (progress?.address) setAddress(progress.address);
+            if (progress?.city) setCity(progress.city);
+            if (progress?.area) setArea(progress.area);
+            if (progress?.map_link) setMapLink(progress.map_link);
+
+            // Priority 2: API (if local is empty or for syncing)
+            if (!progress?.address) {
+                const { data: session } = await api.onboarding.getSession(phone);
+                if (session) {
+                    if (session.address) setAddress(session.address);
+                    if (session.city) setCity(session.city);
+                    if (session.area) setArea(session.area);
+                    if (session.map_link) setMapLink(session.map_link);
+                }
             }
         } catch (e) {
             console.warn('Error fetching location data', e);
@@ -47,26 +57,37 @@ export default function LocationScreen() {
         Keyboard.dismiss();
         if (!address || !city) return Alert.alert('Error', 'Please enter your address and city');
 
-        // Save to Supabase
+        // Save to Local Storage & API
         setLoading(true);
         try {
-            const { error } = await supabase.from('onboarding_sessions').update({
+            await localStorageService.saveOnboardingProgress({
+                phone,
                 address: address,
                 city: city,
                 area: area,
                 map_link: mapLink,
-                updated_at: new Date()
-            }).eq('phone', phone);
+                step: 'categories'
+            });
 
-            if (error) console.warn('Supabase save error:', error);
+            const { error } = await api.onboarding.updateSession({
+                phone,
+                address: address,
+                city: city,
+                area: area,
+                map_link: mapLink,
+                step: 'categories',
+                updated_at: new Date().toISOString()
+            });
+
+            if (error) console.warn('API save error:', error);
         } catch (e) {
             console.error(e);
         } finally {
             setLoading(false);
         }
 
-        // Navigate to Screen: Menu Setup
-        router.push({ pathname: '/(auth)/menu-setup', params: { phone } });
+        // Navigate to Screen: Categories
+        router.push({ pathname: '/(auth)/categories', params: { phone } });
     };
 
     return (
@@ -78,7 +99,7 @@ export default function LocationScreen() {
             <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
                 {/* Header */}
                 <View style={styles.header}>
-                    <Text style={styles.stepText}>4/6</Text>
+                    <Text style={styles.stepText}>3/6</Text>
                     <View style={styles.iconContainer}>
                         <Ionicons name="location" size={24} color="#600E10" />
                     </View>

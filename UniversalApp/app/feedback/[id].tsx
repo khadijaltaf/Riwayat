@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, ScrollView, Pressable, TextInput, Image, ActivityIndicator, Alert, Keyboard, Modal, TouchableOpacity, Linking } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { api } from '@/lib/api-client';
 import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Image, Keyboard, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { supabase } from '@/lib/supabase';
 
 const THEME = {
     primary: '#600E10',
@@ -30,10 +30,10 @@ export default function FeedbackDetailScreen() {
 
     const fetchFeedbackDetail = async () => {
         try {
-            const { data, error } = await supabase.from('feedbacks').select('*').eq('id', id).single();
+            const { data, error } = await api.feedback.get(id as string);
             if (error) throw error;
             setFeedback(data);
-            if (data.reply) setReplyText(data.reply);
+            if (data && (data as any).reply) setReplyText((data as any).reply);
         } catch (e) {
             console.error('Error fetching feedback:', e);
             // Mock data
@@ -61,11 +61,7 @@ export default function FeedbackDetailScreen() {
         if (!replyText.trim()) return Alert.alert('Error', 'Please enter a reply');
 
         try {
-            const { error } = await supabase
-                .from('feedbacks')
-                .update({ reply: replyText, status: 'PUBLISHED', updated_at: new Date() })
-                .eq('id', id);
-
+            const { error } = await api.feedback.updateStatus(id as string, 'PUBLISHED');
             if (error) throw error;
             Alert.alert('Success', 'Feedback reply published successfully');
             router.back();

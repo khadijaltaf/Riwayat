@@ -1,12 +1,12 @@
-
-import React, { useState } from 'react';
-import { StyleSheet, View, TextInput, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView, Alert, Keyboard, Image, ActivityIndicator } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { StatusBar } from 'expo-status-bar';
-import { supabase } from '@/lib/supabase';
-import * as ImagePicker from 'expo-image-picker';
+import { api } from '@/lib/api-client';
+import { localStorageService } from '@/services/local-storage-service';
 import { storageService } from '@/services/storage-service';
+import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import React, { useState } from 'react';
+import { ActivityIndicator, Alert, Image, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 export default function KitchenDetailsScreen() {
     const [kitchenName, setKitchenName] = useState('');
@@ -16,6 +16,17 @@ export default function KitchenDetailsScreen() {
     const { phone } = useLocalSearchParams<{ phone: string }>();
     const [showTaglineInfo, setShowTaglineInfo] = useState(false);
     const router = useRouter();
+
+    React.useEffect(() => {
+        loadProgress();
+    }, []);
+
+    const loadProgress = async () => {
+        const progress = await localStorageService.getOnboardingProgress();
+        if (progress?.kitchen_name) setKitchenName(progress.kitchen_name);
+        if (progress?.kitchen_tagline) setTagline(progress.kitchen_tagline);
+        if (progress?.kitchen_banner_url) setBannerImage(progress.kitchen_banner_url);
+    };
 
     const pickImage = async () => {
         const result = await ImagePicker.launchImageLibraryAsync({
@@ -39,7 +50,7 @@ export default function KitchenDetailsScreen() {
         try {
             let bannerUrl = '';
             if (bannerImage && bannerImage.startsWith('file://')) {
-                const { publicUrl, error: uploadError } = await storageService.uploadImage(bannerImage, 'kitchen-media');
+                const { publicUrl, error: uploadError } = await storageService.uploadFile(bannerImage, 'kitchen-media');
                 if (uploadError) {
                     console.warn('Banner upload error (continuing):', uploadError);
                 } else {
@@ -47,16 +58,26 @@ export default function KitchenDetailsScreen() {
                 }
             }
 
-            const { error } = await supabase.from('onboarding_sessions').update({
+            // Save to Local Storage & Supabase
+            await localStorageService.saveOnboardingProgress({
+                phone,
+                kitchen_name: kitchenName,
+                kitchen_tagline: tagline,
+                kitchen_banner_url: bannerUrl || bannerImage || null,
+                step: 'location'
+            });
+
+            const { error } = await api.onboarding.updateSession({
+                phone,
                 kitchen_name: kitchenName,
                 kitchen_tagline: tagline,
                 kitchen_description: tagline,
-                kitchen_banner_url: bannerUrl || null,
+                kitchen_banner_url: bannerUrl || bannerImage || null,
                 step: 'location',
-                updated_at: new Date()
-            }).eq('phone', phone);
+                updated_at: new Date().toISOString()
+            });
 
-            if (error) console.warn('Supabase save error:', error);
+            if (error) console.warn('API save error:', error);
         } catch (e) {
             console.error(e);
         } finally {
@@ -76,7 +97,7 @@ export default function KitchenDetailsScreen() {
             <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
                 {/* Header */}
                 <View style={styles.header}>
-                    <Text style={styles.stepText}>4/6</Text>
+                    <Text style={styles.stepText}>2/6</Text>
                     <View style={styles.iconContainer}>
                         <Ionicons name="restaurant" size={24} color="#600E10" />
                     </View>

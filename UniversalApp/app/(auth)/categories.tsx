@@ -1,9 +1,10 @@
-
-import React, { useState } from 'react';
-import { StyleSheet, View, Text, Pressable, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import { api } from '@/lib/api-client';
+import { localStorageService } from '@/services/local-storage-service';
 import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import React, { useState } from 'react';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 const CATEGORIES = [
     { id: '1', name: 'Pakistani', icon: 'restaurant-outline' },
@@ -17,8 +18,21 @@ const CATEGORIES = [
 ];
 
 export default function CategoriesScreen() {
+    const { phone } = useLocalSearchParams<{ phone: string }>();
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+    const [loading, setLoading] = useState(false);
     const router = useRouter();
+
+    React.useEffect(() => {
+        loadProgress();
+    }, []);
+
+    const loadProgress = async () => {
+        const progress = await localStorageService.getOnboardingProgress();
+        if (progress?.categories) {
+            setSelectedCategories(progress.categories);
+        }
+    };
 
     const toggleCategory = (id: string) => {
         if (selectedCategories.includes(id)) {
@@ -28,11 +42,31 @@ export default function CategoriesScreen() {
         }
     };
 
-    const handleContinue = () => {
+    const handleContinue = async () => {
         if (selectedCategories.length === 0) return Alert.alert('Error', 'Please select at least one category');
 
-        // Navigate to Screen: ID Verification
-        router.push('/(auth)/id-verification');
+        setLoading(true);
+        try {
+            // Save to Local Storage & API
+            await localStorageService.saveOnboardingProgress({
+                categories: selectedCategories,
+                step: 'id_verification'
+            });
+
+            await api.onboarding.updateSession({
+                phone: (await localStorageService.getOnboardingProgress())?.phone,
+                categories: selectedCategories,
+                step: 'id_verification',
+                updated_at: new Date().toISOString()
+            });
+
+            // Navigate to Screen: ID Verification
+            router.push({ pathname: '/(auth)/id-verification', params: { phone } });
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -47,7 +81,7 @@ export default function CategoriesScreen() {
                     <View style={styles.iconContainer}>
                         <Ionicons name="call" size={24} color="#5C1414" />
                     </View>
-                    <Text style={styles.stepText}>5/6</Text>
+                    <Text style={styles.stepText}>4/6</Text>
                 </View>
 
                 {/* Title and Subtitle */}

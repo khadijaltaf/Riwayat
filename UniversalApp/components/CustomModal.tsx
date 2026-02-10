@@ -1,7 +1,7 @@
 
-import React from 'react';
-import { StyleSheet, View, Text, Pressable, Modal, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import React from 'react';
+import { Dimensions, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 interface CustomModalProps {
     visible: boolean;
@@ -9,9 +9,10 @@ interface CustomModalProps {
     title: string;
     message: string;
     onAccept: () => void;
-    onReject: () => void;
+    onReject?: () => void;
     acceptLabel?: string;
     rejectLabel?: string;
+    showRejectButton?: boolean;
 }
 
 const { width } = Dimensions.get('window');
@@ -24,7 +25,8 @@ export default function CustomModal({
     onAccept,
     onReject,
     acceptLabel = 'Accept',
-    rejectLabel = 'Reject'
+    rejectLabel = 'Reject',
+    showRejectButton = true
 }: CustomModalProps) {
     return (
         <Modal
@@ -43,10 +45,18 @@ export default function CustomModal({
                     <Text style={styles.message}>{message}</Text>
 
                     <View style={styles.buttonRow}>
-                        <Pressable style={styles.rejectButton} onPress={onReject}>
-                            <Text style={styles.rejectButtonText}>{rejectLabel}</Text>
-                        </Pressable>
-                        <Pressable style={styles.acceptButton} onPress={onAccept}>
+                        {showRejectButton && onReject && (
+                            <Pressable style={styles.rejectButton} onPress={onReject}>
+                                <Text style={styles.rejectButtonText}>{rejectLabel}</Text>
+                            </Pressable>
+                        )}
+                        <Pressable
+                            style={[
+                                styles.acceptButton,
+                                !showRejectButton && styles.singleButton
+                            ]}
+                            onPress={onAccept}
+                        >
                             <Text style={styles.acceptButtonText}>{acceptLabel}</Text>
                         </Pressable>
                     </View>
@@ -138,4 +148,8 @@ const styles = StyleSheet.create({
         fontFamily: 'Poppins_700Bold',
         color: '#FFFFFF',
     },
+    singleButton: {
+        width: '100%',
+        backgroundColor: '#600E10',
+    }
 });
