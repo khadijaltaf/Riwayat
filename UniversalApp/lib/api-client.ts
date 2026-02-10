@@ -115,11 +115,16 @@ export const api = {
         verifyOtp: async ({ phone, token }: { phone: string, token: string }) => {
             await delay(1000);
             // Since client simulates OTP generation, we accept any token here
-            // In a real app, this would verify against the Redis/DB stored OTP
             if (token) {
+                // Generate a unique ID for new users, or use fixed ID for test numbers
+                const isTest = phone.endsWith('0000') || phone === '+1234567890';
+                const userId = isTest ? 'user_123' : `u_${phone.replace(/\D/g, '')}`;
+                const user = { id: userId, phone };
+                const session = { ...MOCK_SESSION, user };
+
                 // Store session
-                await AsyncStorage.setItem('auth_session', JSON.stringify(MOCK_SESSION));
-                return { data: { session: MOCK_SESSION, user: MOCK_USER }, error: null };
+                await AsyncStorage.setItem('auth_session', JSON.stringify(session));
+                return { data: { session, user }, error: null };
             }
             return { data: { session: null }, error: new Error('Invalid Token') };
         },
@@ -206,15 +211,20 @@ export const api = {
         },
         get: async (userId: string) => {
             await delay(400);
-            return {
-                data: {
-                    id: userId,
-                    owner_name: "Jane Doe",
-                    phone: "+1234567890",
-                    avatar_url: null
-                } as Profile,
-                error: null
-            };
+            // Only return profile for fixed test user or numbers ending in 0000
+            if (userId === 'user_123' || userId.includes('0000')) {
+                return {
+                    data: {
+                        id: userId,
+                        owner_name: "Jane Doe",
+                        phone: "+1234567890",
+                        avatar_url: null
+                    } as Profile,
+                    error: null
+                };
+            }
+            // New users won't have a profile yet
+            return { data: null, error: null };
         },
         update: async (userId: string, updates: Partial<Profile>) => {
             await delay(600);
